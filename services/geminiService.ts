@@ -51,20 +51,11 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const getApiKeys = (): string[] => {
   const keys: string[] = [];
 
-  // Helper to safely get env vars from Vite or Process
-  const getEnv = (key: string) => {
-    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-        return (import.meta as any).env[key] || '';
-    }
-    if (typeof process !== 'undefined' && process.env) {
-        return process.env[key] || process.env[key.replace('VITE_', '')] || '';
-    }
-    return '';
-  };
-
-  const k1 = getEnv('VITE_API_KEY');
-  const k2 = getEnv('VITE_API_KEY_2');
-  const k3 = getEnv('VITE_API_KEY_3');
+  // Vite replaces these strings with actual values at build time
+  // Using safe access in case import.meta.env is undefined in some contexts
+  const k1 = import.meta.env && import.meta.env.VITE_API_KEY;
+  const k2 = import.meta.env && import.meta.env.VITE_API_KEY_2;
+  const k3 = import.meta.env && import.meta.env.VITE_API_KEY_3;
 
   if (k1) keys.push(k1.trim());
   if (k2) keys.push(k2.trim());
