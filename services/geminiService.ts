@@ -51,11 +51,20 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const getApiKeys = (): string[] => {
   const keys: string[] = [];
 
-  // Vite replaces these strings with actual values at build time
-  // Using direct static access with optional chaining avoids "undefined" errors at runtime
-  const k1 = import.meta.env?.VITE_API_KEY;
-  const k2 = import.meta.env?.VITE_API_KEY_2;
-  const k3 = import.meta.env?.VITE_API_KEY_3;
+  // Helper to safely get env vars from Vite or Process
+  const getEnv = (key: string) => {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+        return (import.meta as any).env[key] || '';
+    }
+    if (typeof process !== 'undefined' && process.env) {
+        return process.env[key] || process.env[key.replace('VITE_', '')] || '';
+    }
+    return '';
+  };
+
+  const k1 = getEnv('VITE_API_KEY');
+  const k2 = getEnv('VITE_API_KEY_2');
+  const k3 = getEnv('VITE_API_KEY_3');
 
   if (k1) keys.push(k1.trim());
   if (k2) keys.push(k2.trim());
@@ -151,11 +160,20 @@ export const generateCreativeAsset = async (
   let enhancedPrompt = '';
   if (archStyle !== ArchitectureStyle.NONE) {
     // Architecture Render Mode
+    // Handle 'Others' by relying on user note instead of applying a specific style string
+    const styleGoal = archStyle === ArchitectureStyle.OTHERS 
+        ? "custom architectural style based on User Note" 
+        : `${archStyle} style`;
+    
+    const styleDetails = archStyle === ArchitectureStyle.OTHERS
+        ? "Follow the User Note strictly for architectural aesthetics"
+        : `Apply ${archStyle} aesthetics`;
+
     enhancedPrompt = `
     Task: Architectural Visualization / Rendering.
     ${imageInstruction}
-    Goal: Render a photorealistic ${archStyle} style architectural image.
-    Style Details: Apply ${archStyle} aesthetics. High-end material texturing, realistic lighting, ray-tracing quality.
+    Goal: Render a photorealistic ${styleGoal} architectural image.
+    Style Details: ${styleDetails}. High-end material texturing, realistic lighting, ray-tracing quality.
     User Note: ${prompt}.
     ${qualityInstruction}
     Composition: Ensure the output fits a ${aspectRatio} aspect ratio.
@@ -312,6 +330,75 @@ export const generateCreativeAsset = async (
   return Promise.all(promises);
 };
 
+// --- NEW EDIT/INPAINTING FUNCTION ---
+export const editCreativeAsset = async (
+  originalImageUrl: string,
+  maskImageUrl: string | null,
+  prompt: string
+): Promise<string> => {
+  const keys = getApiKeys();
+  const apiKey = keys[0];
+  if (!apiKey) throw new Error("API Key missing");
+
+  // Use Gemini 2.5 Flash Image which supports multimodal input
+  const ai = new GoogleGenAI({ apiKey: apiKey });
+
+  const parts: any[] = [];
+  
+  // 1. Original Image
+  const { mimeType: orgMime, data: orgData } = parseBase64Image(originalImageUrl);
+  parts.push({
+      inlineData: {
+          mimeType: orgMime,
+          data: orgData
+      }
+  });
+
+  // 2. Mask Image (If provided) - Passed as a second image
+  if (maskImageUrl) {
+     const { mimeType: maskMime, data: maskData } = parseBase64Image(maskImageUrl);
+     parts.push({
+         inlineData: {
+             mimeType: maskMime,
+             data: maskData
+         }
+     });
+  }
+
+  // 3. Prompt
+  // Explicitly instruct the model about the mask usage
+  const textPrompt = `
+  Task: Image Editing / Inpainting.
+  Input: Two images provided. 
+  1. The first image is the original.
+  2. The second image is a black-and-white mask (White = Area to edit, Black = Protect).
+  Instruction: Edit the white area of the mask in the original image based on this prompt: "${prompt}".
+  Ensure seamless blending and realistic lighting.
+  `;
+  parts.push({ text: textPrompt });
+
+  try {
+      const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash-image',
+          contents: { parts: parts },
+          // Note: Inpainting might follow different parameters in future versions, 
+          // but multimodal instruction following is the current standard method for Flash.
+      });
+
+      if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
+          for (const part of response.candidates[0].content.parts) {
+              if (part.inlineData) {
+                  return `data:image/png;base64,${part.inlineData.data}`;
+              }
+          }
+      }
+      throw new Error("No edited image returned.");
+  } catch (e: any) {
+      console.error("Edit Error:", e);
+      throw new Error(`Edit failed: ${e.message}`);
+  }
+};
+
 export const generatePromptFromImage = async (
   images: string[],
   type: MediaType,
@@ -338,10 +425,11 @@ export const generatePromptFromImage = async (
   let promptRequest = '';
 
   if (archStyle !== ArchitectureStyle.NONE) {
+    const styleText = archStyle === ArchitectureStyle.OTHERS ? "custom" : `"${archStyle}"`;
     promptRequest = `
       You are an expert Architectural Consultant. 
       Analyze the provided ${images.length} image(s) as a reference for geometry, layout, or atmosphere.
-      The user wants to create a Photorealistic Architectural Render in the "${archStyle}" style.
+      The user wants to create a Photorealistic Architectural Render in the ${styleText} style.
       Write a precise, professional prompt (approx 40-60 words) describing the scene, materials, lighting, and furniture.
       Return ONLY the prompt text.
     `;
@@ -378,10 +466,11 @@ export const enhanceUserPrompt = async (
   
   let instruction = '';
   if (archStyle !== ArchitectureStyle.NONE) {
+    const context = archStyle === ArchitectureStyle.OTHERS ? "architectural render" : `${archStyle} style render`;
     instruction = `
       You are a specialized Architectural Visualization Prompt Engineer.
       Improve the user's prompt: "${currentPrompt}".
-      Context: Creating a ${archStyle} style render.
+      Context: Creating a ${context}.
       Task: Expand the prompt to include details about lighting, materials, and atmosphere. 
       Keep it concise (under 80 words). Output ONLY the improved prompt.
     `;

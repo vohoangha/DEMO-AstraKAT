@@ -13,16 +13,20 @@ export enum MediaType {
 
 export enum ArchitectureStyle {
   NONE = 'None',
-  STANDARD = 'Standard',
-  MODERN = 'Modern',
+  FRAME_HOUSE = 'Frame House',
+  FUTURISTIC = 'Futuristic',
   INDOCHINE = 'Indochine',
-  MINIMALIST = 'Minimalist',
-  SCANDINAVIAN = 'Scandinavian',
-  LUXURY = 'Luxury Contemporary',
-  NEOCLASSIC = 'Neoclassical',
   INDUSTRIAL = 'Industrial',
+  JAPANDI = 'Japandi',
+  LUXURY = 'Luxury Contemporary',
+  MINIMALIST = 'Minimalist',
+  MODERN = 'Modern',
+  NEOCLASSIC = 'Neoclassical',
+  SCANDINAVIAN = 'Scandinavian',
+  STANDARD = 'Standard',
   TROPICAL = 'Tropical Resort',
-  FUTURISTIC = 'Futuristic'
+  WABI_SABI = 'Wabi Sabi',
+  OTHERS = 'Others'
 }
 
 export enum ImageQuality {

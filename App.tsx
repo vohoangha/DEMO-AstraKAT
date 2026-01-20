@@ -4,7 +4,7 @@ import { getDatabase, ref, onValue, onDisconnect, set, push, serverTimestamp } f
 import { GlassCard } from './components/GlassCard';
 import { Button } from './components/Button';
 import { MediaType, ASPECT_RATIOS, GeneratedImage, ArchitectureStyle, ImageQuality } from './types';
-import { generateCreativeAsset, generatePromptFromImage, enhanceUserPrompt } from './services/geminiService';
+import { generateCreativeAsset, generatePromptFromImage, enhanceUserPrompt, editCreativeAsset } from './services/geminiService';
 import { 
   Wand2, 
   Download, 
@@ -34,13 +34,34 @@ import {
   Trash2,
   ShieldCheck,
   Users,
-  WifiOff,
-  AlertCircle
+  Brush, 
+  Circle as CircleIcon,
+  Square as SquareIcon,
+  Eraser,
+  Undo2,
+  Check,
+  Edit3,
+  Send
 } from 'lucide-react';
 
 // ==========================================
+// *** CẤU HÌNH FIREBASE REALTIME COUNTER ***
+const firebaseConfig = {
+  apiKey: "AIzaSyAEE8kkji3B4h2DQ2cO1tq4G6HjmIOLdOg",
+  authDomain: "astra-kat-couter.firebaseapp.com",
+  databaseURL: "https://astra-kat-couter-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "astra-kat-couter",
+  storageBucket: "astra-kat-couter.firebasestorage.app",
+  messagingSenderId: "46973775395",
+  appId: "1:46973775395:web:e6b6859b97b63232274b96"
+};
+
+// Khởi tạo Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// ==========================================
 // *** CẤU HÌNH DRIVE (QUAN TRỌNG) ***
-// Sau khi bạn Deploy script (bước 2), hãy dán URL có đuôi /exec vào dòng dưới đây:
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyKC7UigaUPX3kzhR3JSVA1-vxjC1wGlyDoCCELiE5f_xmmSu3-VTPD41tjPIUIRabNNA/exec'; 
 // ==========================================
 
@@ -53,128 +74,275 @@ const verifyAccess = async (key: string): Promise<boolean> => {
 
 // --- REALTIME ONLINE COUNTER COMPONENT ---
 const OnlineUserCounter: React.FC = () => {
-  const [onlineCount, setOnlineCount] = useState<number>(1);
-  const [status, setStatus] = useState<'connecting' | 'connected' | 'offline' | 'config_missing'>('connecting');
+  const [count, setCount] = useState<number>(0);
 
   useEffect(() => {
-    // 1. Get Config - DIRECT & EXPLICIT ACCESS REQUIRED FOR VITE
-    // Vite replaces 'import.meta.env.VITE_...' with strings at build time.
-    // Using optional chaining (?.) to prevent crashes if import.meta.env is undefined
-    const firebaseConfig = {
-      apiKey: import.meta.env?.VITE_FB_API_KEY,
-      authDomain: import.meta.env?.VITE_FB_AUTH_DOMAIN,
-      databaseURL: import.meta.env?.VITE_FB_DB_URL,
-      projectId: import.meta.env?.VITE_FB_PROJECT_ID,
-      storageBucket: import.meta.env?.VITE_FB_STORAGE_BUCKET,
-      messagingSenderId: import.meta.env?.VITE_FB_MESSAGING_SENDER_ID,
-      appId: import.meta.env?.VITE_FB_APP_ID
+    const listRef = ref(db, 'online_users');
+    const userRef = push(listRef);
+
+    onDisconnect(userRef).remove();
+    
+    set(userRef, {
+      timestamp: serverTimestamp()
+    });
+
+    const unsubscribe = onValue(listRef, (snapshot) => {
+      setCount(snapshot.size || 0);
+    });
+
+    return () => {
+      unsubscribe();
+      set(userRef, null);
     };
-
-    // If no config found, just show warning state
-    if (!firebaseConfig.apiKey || !firebaseConfig.databaseURL) {
-      setStatus('config_missing');
-      return;
-    }
-
-    try {
-      // 2. Initialize Firebase
-      // Use a unique name for the app to prevent re-initialization errors in React Strict Mode
-      const appName = 'AstraOnlineCounter';
-      let app;
-      try {
-        app = initializeApp(firebaseConfig, appName);
-      } catch (e: any) {
-         if (e.code === 'app/duplicate-app') {
-            // If app exists, ignore
-            return; 
-         }
-         console.error("Firebase Init Failed:", e);
-         setStatus('offline');
-         return;
-      }
-      
-      const db = getDatabase(app);
-      setStatus('connected');
-
-      // 3. Presence Logic
-      const listRef = ref(db, 'online_users');
-      const userRef = push(listRef);
-
-      // Self-cleaning: remove this user when they disconnect (close tab)
-      onDisconnect(userRef).remove();
-
-      // Add self to the list
-      set(userRef, {
-        joined: serverTimestamp(),
-        device: navigator.userAgent
-      });
-
-      // 4. Listen for count changes
-      const unsubscribe = onValue(listRef, (snapshot) => {
-        if (snapshot.exists()) {
-          setOnlineCount(snapshot.size);
-        } else {
-          setOnlineCount(1);
-        }
-      });
-
-      return () => {
-        unsubscribe();
-        // Clean up self on component unmount
-        set(userRef, null); 
-      };
-
-    } catch (err) {
-      console.error("Firebase Init Error:", err);
-      setStatus('offline');
-    }
   }, []);
 
-  if (status === 'config_missing') return null;
-
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#005060]/50 border border-[#e2b36e]/30 backdrop-blur-md shadow-[0_0_10px_rgba(226,179,110,0.1)] animate-in fade-in duration-700">
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#e2b36e]/10 border border-[#e2b36e]/30 backdrop-blur-md shadow-[0_0_15px_rgba(226,179,110,0.1)] select-none cursor-default">
       <div className="relative flex h-2 w-2">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#e2b36e] opacity-75 duration-1000"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#e2b36e] shadow-[0_0_5px_#e2b36e]"></span>
       </div>
       <div className="flex items-center gap-1.5">
-        <Users size={12} className="text-[#e2b36e]" />
-        <span className="text-[10px] font-bold text-[#e2b36e] tracking-widest tabular-nums leading-none">
-          {onlineCount} <span className="opacity-60 hidden sm:inline">ONLINE</span>
+        <span className="text-[10px] font-bold text-[#e2b36e] tracking-widest tabular-nums drop-shadow-[0_0_2px_rgba(226,179,110,0.5)]">
+          {count} Online Now
         </span>
       </div>
     </div>
   );
 };
 
-
-// --- SUB-COMPONENT: FULL SCREEN VIEWER ---
-const FullScreenViewer: React.FC<{ src: string; onClose: () => void }> = ({ src, onClose }) => {
+// --- SUB-COMPONENT: FULL SCREEN VIEWER & EDITOR ---
+const FullScreenViewer: React.FC<{ src: string; onClose: () => void; onSaveEdit?: (newUrl: string) => void }> = ({ src, onClose, onSaveEdit }) => {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  
+  // EDIT MODE STATES
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editTool, setEditTool] = useState<'brush' | 'rect' | 'circle'>('brush');
+  const [brushSize, setBrushSize] = useState(30); // Default larger brush
+  const [editPrompt, setEditPrompt] = useState('');
+  const [isEditingLoading, setIsEditingLoading] = useState(false);
+  const [editAutoLoading, setEditAutoLoading] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  
   const dragStartRef = useRef({ x: 0, y: 0 });
   const imgRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // CANVAS REFS
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const startPosRef = useRef({ x: 0, y: 0 });
+  const snapshotRef = useRef<ImageData | null>(null);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
-    
-    // Add Escape key listener
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
-
     return () => {
       document.body.style.overflow = 'unset';
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose]);
 
+  // --- CANVAS LOGIC ---
+  const initCanvas = () => {
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (img && canvas) {
+      // Set canvas resolution to match natural image size for high quality
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isEditMode) {
+      // Reset zoom/pan when entering edit mode
+      setScale(1);
+      setPosition({ x: 0, y: 0 });
+      // Initialize canvas after a brief delay to ensure DOM is ready
+      setTimeout(initCanvas, 50);
+    }
+  }, [isEditMode]);
+
+  const getCanvasCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img) return { x: 0, y: 0 };
+
+    const rect = img.getBoundingClientRect(); // Use image rect because canvas sits exactly on top
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  };
+
+  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isEditMode) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    setIsDrawing(true);
+    const { x, y } = getCanvasCoordinates(e);
+    startPosRef.current = { x, y };
+    
+    // Save snapshot for shape tools to avoid trails
+    snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    if (editTool === 'brush') {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; // Soft white transparency for visual
+      // Scale brush size relative to image display size vs actual size
+      ctx.lineWidth = brushSize * (canvas.width / imgRef.current!.offsetWidth); 
+    }
+  };
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing || !isEditMode) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const { x, y } = getCanvasCoordinates(e);
+
+    if (editTool === 'brush') {
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    } else if (editTool === 'rect') {
+      if (snapshotRef.current) ctx.putImageData(snapshotRef.current, 0, 0);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      const width = x - startPosRef.current.x;
+      const height = y - startPosRef.current.y;
+      ctx.fillRect(startPosRef.current.x, startPosRef.current.y, width, height);
+    } else if (editTool === 'circle') {
+      if (snapshotRef.current) ctx.putImageData(snapshotRef.current, 0, 0);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.beginPath();
+      const radius = Math.sqrt(Math.pow(x - startPosRef.current.x, 2) + Math.pow(y - startPosRef.current.y, 2));
+      ctx.arc(startPosRef.current.x, startPosRef.current.y, radius, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+    const canvas = canvasRef.current;
+    // Don't clear context here, we want to keep the drawing
+  };
+
+  const clearMask = () => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  // --- EDIT API LOGIC ---
+  const handleEditGenerate = async () => {
+    if (!editPrompt.trim()) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    setIsEditingLoading(true);
+    try {
+      // 1. Create a binary mask (Black Background, White Foreground)
+      // The visual canvas is white transparent, we need a clean mask for the API
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = canvas.width;
+      maskCanvas.height = canvas.height;
+      const maskCtx = maskCanvas.getContext('2d');
+      if (!maskCtx) throw new Error("Canvas Error");
+
+      // Fill black
+      maskCtx.fillStyle = '#000000';
+      maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+      // Draw the user's drawing onto this new canvas, enforcing solid white
+      const visualData = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height);
+      if (visualData) {
+         // Loop pixels: if alpha > 0, make it white. Else keep black.
+         const data = visualData.data;
+         const maskImgData = maskCtx.createImageData(canvas.width, canvas.height);
+         const maskData = maskImgData.data;
+         
+         for(let i=0; i < data.length; i+=4) {
+             const alpha = data[i+3];
+             if (alpha > 10) { // If drew something (even faint)
+                 maskData[i] = 255;   // R
+                 maskData[i+1] = 255; // G
+                 maskData[i+2] = 255; // B
+                 maskData[i+3] = 255; // Alpha
+             } else {
+                 maskData[i] = 0;
+                 maskData[i+1] = 0;
+                 maskData[i+2] = 0;
+                 maskData[i+3] = 255; // Opaque Black
+             }
+         }
+         maskCtx.putImageData(maskImgData, 0, 0);
+      }
+      
+      const maskBase64 = maskCanvas.toDataURL('image/png');
+
+      // 2. Call API
+      const editedUrl = await editCreativeAsset(src, maskBase64, editPrompt);
+      if (onSaveEdit && editedUrl) {
+        onSaveEdit(editedUrl);
+        // Optionally update the current view
+        // setSrc(editedUrl) - but src is prop
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Edit failed. Please try again.");
+    } finally {
+      setIsEditingLoading(false);
+    }
+  };
+
+  const handleEditAutoPrompt = async () => {
+    setEditAutoLoading(true);
+    try {
+        const prompt = await generatePromptFromImage([src], MediaType.STANDARD, ArchitectureStyle.NONE);
+        setEditPrompt(prompt);
+    } catch(e) { console.error(e); }
+    finally { setEditAutoLoading(false); }
+  };
+  
+  const handleEditEnhancePrompt = async () => {
+      if(!editPrompt) return;
+      setIsEnhancing(true);
+      try {
+          const enhanced = await enhanceUserPrompt(editPrompt, MediaType.STANDARD, ArchitectureStyle.NONE);
+          setEditPrompt(enhanced);
+      } catch(e) { console.error(e); }
+      finally { setIsEnhancing(false); }
+  };
+
+
+  // --- VIEW ZOOM LOGIC ---
   const handleZoom = (delta: number) => {
+    if (isEditMode) return; // Disable zoom in edit mode
     setScale(prev => {
       const newScale = Math.min(Math.max(1, prev + delta), 5);
       if (newScale === 1) setPosition({ x: 0, y: 0 });
@@ -183,67 +351,137 @@ const FullScreenViewer: React.FC<{ src: string; onClose: () => void }> = ({ src,
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+    if (isEditMode) return;
     e.stopPropagation();
     const delta = e.deltaY > 0 ? -0.2 : 0.2;
     handleZoom(delta);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (scale > 1) {
-      setIsDragging(true);
-      dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    if (isEditMode) {
+        startDrawing(e);
+    } else {
+        if (scale > 1) {
+            setIsDragging(true);
+            dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+        }
     }
   };
 
   const animationFrameRef = useRef<number>(null);
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging && scale > 1) {
-      e.preventDefault();
-      // Use requestAnimationFrame for smoother dragging
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      
-      animationFrameRef.current = requestAnimationFrame(() => {
-          setPosition({
-            x: e.clientX - dragStartRef.current.x,
-            y: e.clientY - dragStartRef.current.y
-          });
-      });
+    if (isEditMode) {
+        draw(e);
+    } else {
+        if (isDragging && scale > 1) {
+        e.preventDefault();
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = requestAnimationFrame(() => {
+            setPosition({
+                x: e.clientX - dragStartRef.current.x,
+                y: e.clientY - dragStartRef.current.y
+            });
+        });
+        }
     }
   };
 
   const handleMouseUp = () => {
-    setIsDragging(false);
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    if (isEditMode) {
+        stopDrawing();
+    } else {
+        setIsDragging(false);
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    }
   };
 
   return (
     <div 
       className="fixed inset-0 z-[100] bg-[#002830]/95 flex flex-col items-center justify-center animate-in fade-in duration-300"
       onWheel={handleWheel}
-      onClick={onClose}
-      onContextMenu={(e) => e.preventDefault()} // Disable Context Menu
+      // Only close on click if not interacting with UI
+      onClick={(e) => { if (e.target === e.currentTarget && !isEditMode) onClose(); }} 
+      onContextMenu={(e) => e.preventDefault()}
     >
+      {/* HEADER BAR */}
       <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-50 bg-gradient-to-b from-[#002830] to-transparent pointer-events-none">
-        <div className="text-[#e2b36e]/80 text-sm flex gap-4 pointer-events-auto">
-          <span>Scroll to Zoom</span>
-          <span>Drag to Pan</span>
-          <span className="hidden sm:inline opacity-50">| Press ESC to Close</span>
+        <div className="text-[#e2b36e]/80 text-sm flex gap-4 pointer-events-auto items-center">
+            {isEditMode ? (
+                <div className="flex items-center gap-2 bg-[#e2b36e]/10 px-3 py-1.5 rounded-full border border-[#e2b36e]/20 backdrop-blur-md">
+                     <span className="animate-pulse w-2 h-2 rounded-full bg-red-500"></span>
+                     <span className="font-bold text-[#e2b36e] tracking-wider text-xs uppercase">Edit Mode Active</span>
+                </div>
+            ) : (
+                <>
+                    <span>Scroll to Zoom</span>
+                    <span>Drag to Pan</span>
+                    <span className="hidden sm:inline opacity-50">| Press ESC to Close</span>
+                </>
+            )}
         </div>
-        <button 
-          onClick={onClose}
-          className="p-2 bg-[#e2b36e]/10 hover:bg-[#e2b36e]/20 rounded-full text-[#e2b36e] transition-colors pointer-events-auto"
-        >
-          <X className="w-6 h-6" />
-        </button>
+        <div className="flex items-center gap-2 pointer-events-auto">
+             <button 
+                onClick={() => setIsEditMode(!isEditMode)}
+                className={`p-2 rounded-full transition-all duration-300 border ${isEditMode ? 'bg-[#e2b36e] text-[#002830] border-[#e2b36e] shadow-[0_0_15px_#e2b36e]' : 'bg-[#e2b36e]/10 text-[#e2b36e] border-[#e2b36e]/20 hover:bg-[#e2b36e]/20'}`}
+                title={isEditMode ? "Exit Edit Mode" : "Edit Image"}
+             >
+                {isEditMode ? <Check className="w-6 h-6" /> : <Edit3 className="w-6 h-6" />}
+             </button>
+             <button 
+                onClick={onClose}
+                className="p-2 bg-[#e2b36e]/10 hover:bg-[#e2b36e]/20 rounded-full text-[#e2b36e] transition-colors border border-transparent hover:border-[#e2b36e]/30"
+            >
+                <X className="w-6 h-6" />
+            </button>
+        </div>
       </div>
 
+      {/* EDIT TOOLBAR (FLOATING LEFT) */}
+      {isEditMode && (
+          <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-50 pointer-events-auto animate-in slide-in-from-left fade-in duration-300">
+             <GlassCard className="p-3 flex flex-col gap-3">
+                 <button onClick={() => setEditTool('brush')} className={`p-2 rounded-lg transition-all relative group ${editTool === 'brush' ? 'bg-[#e2b36e] text-[#002830]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Brush">
+                    <Brush size={20} />
+                 </button>
+                 
+                 {/* SLIDER POPUP FOR BRUSH SIZE */}
+                 {editTool === 'brush' && (
+                     <div className="absolute left-full top-0 ml-3 bg-[#005060]/90 backdrop-blur-md border border-[#e2b36e]/20 rounded-lg p-3 w-32 shadow-xl animate-in slide-in-from-left-2 fade-in">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] text-[#e2b36e] uppercase font-bold">Size</span>
+                            <span className="text-[10px] text-white font-mono">{brushSize}px</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="5" 
+                            max="100" 
+                            value={brushSize} 
+                            onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                            className="w-full h-1.5 bg-[#e2b36e]/20 rounded-lg appearance-none cursor-pointer accent-[#e2b36e]"
+                        />
+                     </div>
+                 )}
+
+                 <button onClick={() => setEditTool('rect')} className={`p-2 rounded-lg transition-all ${editTool === 'rect' ? 'bg-[#e2b36e] text-[#002830]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Rectangle"><SquareIcon size={20} /></button>
+                 <button onClick={() => setEditTool('circle')} className={`p-2 rounded-lg transition-all ${editTool === 'circle' ? 'bg-[#e2b36e] text-[#002830]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Circle"><CircleIcon size={20} /></button>
+                 <div className="h-[1px] w-full bg-[#e2b36e]/20 my-1"></div>
+                 <button onClick={clearMask} className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors" title="Clear Mask"><Eraser size={20} /></button>
+             </GlassCard>
+          </div>
+      )}
+
+      {/* MAIN CONTENT AREA */}
       <div 
-        className="relative w-full h-full flex items-center justify-center overflow-hidden cursor-move"
+        ref={containerRef}
+        className={`relative w-full h-full flex items-center justify-center overflow-hidden ${isEditMode ? 'cursor-crosshair' : 'cursor-move'}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={handleMouseDown}
+        onTouchMove={handleMouseMove}
+        onTouchEnd={handleMouseUp}
         onClick={(e) => e.stopPropagation()} 
       >
         <img 
@@ -251,8 +489,8 @@ const FullScreenViewer: React.FC<{ src: string; onClose: () => void }> = ({ src,
           src={src} 
           alt="Full Screen Preview"
           style={{ 
-            transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`, // Hardware acceleration
-            transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+            transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`, 
+            transition: (isDragging || isDrawing) ? 'none' : 'transform 0.2s ease-out',
             maxWidth: '100%',
             maxHeight: '100%',
             objectFit: 'contain'
@@ -260,119 +498,143 @@ const FullScreenViewer: React.FC<{ src: string; onClose: () => void }> = ({ src,
           className="select-none pointer-events-auto will-change-transform"
           draggable={false}
         />
+        {/* CANVAS OVERLAY FOR MASKING */}
+        <canvas 
+            ref={canvasRef}
+            className={`absolute pointer-events-none will-change-transform ${!isEditMode && 'hidden'}`}
+            style={{
+                transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
+                width: imgRef.current?.getBoundingClientRect().width || 'auto',
+                height: imgRef.current?.getBoundingClientRect().height || 'auto',
+                transition: (isDragging || isDrawing) ? 'none' : 'transform 0.2s ease-out',
+            }}
+        />
       </div>
 
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-[#005060]/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-[#e2b36e]/20 z-50 shadow-[0_0_20px_rgba(226,179,110,0.1)]" onClick={(e) => e.stopPropagation()}>
-        <button 
-          onClick={() => handleZoom(-0.5)}
-          className="p-2 hover:bg-[#e2b36e]/10 rounded-lg text-[#e2b36e] disabled:opacity-30"
-          disabled={scale <= 1}
-        >
-          <ZoomOut className="w-5 h-5" />
-        </button>
-        <span className="text-[#e2b36e] font-mono min-w-[3ch] text-center font-bold">
-          {Math.round(scale * 100)}%
-        </span>
-        <button 
-          onClick={() => handleZoom(0.5)}
-          className="p-2 hover:bg-[#e2b36e]/10 rounded-lg text-[#e2b36e] disabled:opacity-30"
-          disabled={scale >= 5}
-        >
-          <ZoomIn className="w-5 h-5" />
-        </button>
+      {/* BOTTOM CONTROLS (ZOOM OR PROMPT) */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+         {!isEditMode ? (
+            /* VIEW MODE CONTROLS */
+            <div className="flex items-center gap-4 bg-[#005060]/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-[#e2b36e]/20 shadow-[0_0_20px_rgba(226,179,110,0.1)]">
+                <button onClick={() => handleZoom(-0.5)} className="p-2 hover:bg-[#e2b36e]/10 rounded-lg text-[#e2b36e] disabled:opacity-30" disabled={scale <= 1}><ZoomOut className="w-5 h-5" /></button>
+                <span className="text-[#e2b36e] font-mono min-w-[3ch] text-center font-bold">{Math.round(scale * 100)}%</span>
+                <button onClick={() => handleZoom(0.5)} className="p-2 hover:bg-[#e2b36e]/10 rounded-lg text-[#e2b36e] disabled:opacity-30" disabled={scale >= 5}><ZoomIn className="w-5 h-5" /></button>
+            </div>
+         ) : (
+             /* EDIT MODE PROMPT BAR */
+             <GlassCard className="p-0 flex flex-col gap-0 min-w-[320px] sm:min-w-[500px] w-[600px] max-w-[90vw] animate-in slide-in-from-bottom fade-in duration-300 relative overflow-hidden">
+                  <div className="relative w-full h-24">
+                      <textarea 
+                        value={editPrompt}
+                        onChange={(e) => setEditPrompt(e.target.value)}
+                        placeholder="Describe what to change in the highlighted area..."
+                        className="w-full h-full bg-[#e2b36e]/5 hover:bg-[#e2b36e]/10 focus:bg-[#e2b36e]/10 transition-colors border-none rounded-t-xl px-4 py-3 text-sm text-[#e2b36e] placeholder-[#e2b36e]/40 focus:outline-none resize-none custom-scrollbar"
+                        onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditGenerate(); }}}
+                      />
+                      {/* CONDITIONAL BUTTONS: AUTO or ENHANCE */}
+                      <div className="absolute left-3 bottom-3 flex gap-2 z-10">
+                          {!editPrompt.trim() ? (
+                              <button 
+                                onClick={handleEditAutoPrompt} 
+                                disabled={editAutoLoading} 
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-lg border border-[#e2b36e]/30 ${editAutoLoading ? 'bg-[#005060] text-[#e2b36e] cursor-wait' : 'bg-[#e2b36e]/20 text-[#e2b36e] hover:bg-[#e2b36e]/30'}`}
+                              >
+                                  <Sparkles size={12} className={editAutoLoading ? "animate-spin" : ""} />
+                                  {editAutoLoading ? 'Reading...' : 'Auto Prompt'}
+                              </button>
+                          ) : (
+                              <button 
+                                onClick={handleEditEnhancePrompt} 
+                                disabled={isEnhancing} 
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${isEnhancing ? 'bg-slate-900 border border-white/10 text-white/30 cursor-wait' : 'bg-[#005060] border border-[#e2b36e]/30 text-[#e2b36e] shadow-[0_0_15px_rgba(226,179,110,0.2)] hover:shadow-[0_0_25px_rgba(226,179,110,0.4)] hover:bg-[#003b46]'}`}
+                              >
+                                  <Wand2 size={12} className={isEnhancing ? "animate-spin" : "fill-[#e2b36e]/50"} />
+                                  {isEnhancing ? 'Enhancing...' : 'Enhance'}
+                              </button>
+                          )}
+                      </div>
+                      
+                      {/* GENERATE BUTTON */}
+                      <div className="absolute right-3 bottom-3 z-10">
+                           <Button 
+                                onClick={handleEditGenerate} 
+                                isLoading={isEditingLoading}
+                                variant="rainbow"
+                                className="py-2 px-4 text-xs font-bold"
+                            >
+                                <Send size={14} className="mr-1" />
+                                {isEditingLoading ? "..." : "Generate"}
+                            </Button>
+                      </div>
+                  </div>
+             </GlassCard>
+         )}
       </div>
+
+      {/* SUB-COMPONENT DEFINITIONS FOR APP */}
     </div>
   );
 };
 
-// --- SUB-COMPONENT: SINGLE GLOWING STAR LOADER ---
-const AILoader: React.FC<{ progress: number; small?: boolean }> = React.memo(({ progress, small = false }) => {
-  const containerClass = small ? 'gap-2' : 'gap-3';
-  // Adjusted sizes to be "moderate" - not too big, not too small
-  const starSize = small ? 'w-12 h-12' : 'w-20 h-20'; 
-  const fontSize = small ? 'text-base' : 'text-xl';
-  
-  // Create unique IDs for gradients/filters to prevent conflicts in grid view
-  const [uniqueId] = useState(() => Math.random().toString(36).substr(2, 9));
+// --- SUB-COMPONENTS: RatioIcon & AILoader ---
 
-  // VERY Sharp 4-Pointed Star Path (Concave sides, tight center)
-  // Quadratic curves with control points very close to center (50,50) to create sharp spikes
-  const starPath = "M50 0 Q 52 48 100 50 Q 52 52 50 100 Q 48 52 0 50 Q 48 48 50 0 Z";
-
-  return (
-    <div className={`flex flex-col items-center justify-center ${containerClass} select-none`}>
-      <div className={`${starSize} relative flex items-center justify-center`}>
-        {/* NO SPIN - PULSE ONLY */}
-        <div className="w-full h-full">
-            <svg 
-            viewBox="0 0 100 100" 
-            className="w-full h-full overflow-visible"
-            >
-            <defs>
-                <linearGradient id={`starGradient-${uniqueId}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#005060" /> {/* Katinat Teal */}
-                <stop offset="50%" stopColor="#e2b36e" /> {/* Katinat Gold */}
-                <stop offset="100%" stopColor="#003b46" /> {/* Deep Teal */}
-                </linearGradient>
-                <filter id={`starGlow-${uniqueId}`} x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                <feMerge>
-                    <feMergeNode in="coloredBlur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-                </filter>
-            </defs>
-
-            {/* Single Main Star - Pulse Only */}
-            <path 
-                d={starPath}
-                fill={`url(#starGradient-${uniqueId})`} 
-                stroke="rgba(255,255,255,0.9)"
-                strokeWidth="0.5"
-                filter={`url(#starGlow-${uniqueId})`}
-                className="origin-center animate-pulse"
-                style={{ animationDuration: '1.5s' }}
-            />
-            </svg>
-        </div>
-      </div>
-
-      {/* Percentage Text Below */}
-      <div className={`${fontSize} font-mono font-bold text-[#e2b36e] tracking-[0.2em] drop-shadow-[0_0_15px_rgba(226,179,110,0.5)]`}>
-        {Math.round(progress)}%
-      </div>
-    </div>
-  );
-});
-
-
-// --- DRAG & DROP UTILS ---
-type DragType = 'input' | 'reference';
-interface DragItem {
-  type: DragType;
-  index: number;
-}
-
-// --- HELPER FOR RATIO ICONS ---
 const RatioIcon: React.FC<{ ratio: string }> = ({ ratio }) => {
-  let width = '10px';
-  let height = '10px';
+  let width = 14;
+  let height = 14;
 
-  switch (ratio) {
-    case '1:1': width = '10px'; height = '10px'; break;
-    case '9:16': width = '6px'; height = '10px'; break;
-    case '16:9': width = '10px'; height = '6px'; break;
-    case '3:4': width = '8px'; height = '10px'; break;
-    case '4:3': width = '10px'; height = '8px'; break;
-    default: width = '10px'; height = '10px'; // Default for empty/select state
+  switch(ratio) {
+      case '16:9': width = 18; height = 10; break;
+      case '9:16': width = 10; height = 18; break;
+      case '4:3': width = 16; height = 12; break;
+      case '3:4': width = 12; height = 16; break;
+      case '1:1': width = 14; height = 14; break;
   }
 
   return (
-    <div className="w-3 h-3 flex items-center justify-center">
-      <div 
-        style={{ width, height }} 
-        className="border border-current rounded-[1px]"
-      />
+    <div className="w-5 h-5 flex items-center justify-center opacity-80">
+       <div 
+         className="border border-current"
+         style={{ width: `${width}px`, height: `${height}px` }}
+       />
+    </div>
+  );
+};
+
+const AILoader: React.FC<{ progress: number; small?: boolean }> = ({ progress, small }) => {
+  return (
+    <div className={`flex flex-col items-center justify-center gap-3 z-10 ${small ? 'scale-75' : 'scale-100'}`}>
+      <div className="relative flex items-center justify-center">
+         {/* Glow Effect */}
+         <div className="absolute inset-0 bg-blue-500/40 blur-xl rounded-full animate-pulse"></div>
+         
+         {/* 4-Pointed Star SVG - ASTRA Theme */}
+         <svg 
+            width="40" 
+            height="40" 
+            viewBox="0 0 100 100" 
+            className="animate-pulse drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]"
+            xmlns="http://www.w3.org/2000/svg"
+         >
+             <defs>
+                <linearGradient id="starGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#3b82f6" /> {/* Blue */}
+                    <stop offset="100%" stopColor="#ef4444" /> {/* Red */}
+                </linearGradient>
+            </defs>
+            <path 
+                d="M 50 0 C 50 35 60 45 100 50 C 60 55 50 65 50 100 C 50 65 40 55 0 50 C 40 45 50 35 50 0 Z" 
+                fill="url(#starGradient)" 
+                stroke="rgba(255,255,255,0.9)"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+            />
+         </svg>
+      </div>
+      
+      {/* Percentage */}
+      <div className="text-center mt-1">
+          <span className="block text-[#e2b36e] font-mono font-bold text-sm leading-none">{Math.round(progress)}%</span>
+      </div>
     </div>
   );
 };
@@ -431,7 +693,7 @@ const App: React.FC = () => {
   const [isQualityDropdownOpen, setIsQualityDropdownOpen] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [draggingItem, setDraggingItem] = useState<DragItem | null>(null);
+  const [draggingItem, setDraggingItem] = useState<any | null>(null);
 
   // --- SECURITY: REACT INTEGRITY CHECK ---
   useEffect(() => {
@@ -556,8 +818,7 @@ const App: React.FC = () => {
   }, [error]);
 
   const checkApiKey = async () => {
-    // Vite requires explicit import.meta.env.VITE_... access
-    const envKey = import.meta.env?.VITE_API_KEY;
+    const envKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
     if (envKey) { setHasApiKey(true); return; }
     try {
       const win = window as any;
@@ -569,7 +830,7 @@ const App: React.FC = () => {
   };
 
   const handleApiKeySelect = async () => {
-    const envKey = import.meta.env?.VITE_API_KEY;
+    const envKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
     if (envKey) { setHasApiKey(true); return; }
     const win = window as any;
     if (win.aistudio && win.aistudio.openSelectKey) {
@@ -621,7 +882,7 @@ const App: React.FC = () => {
   
   const clearHistory = () => { if (window.confirm("Are you sure you want to clear all history?")) { setHistory([]); setGeneratedImages([]); } };
 
-  const handleDragStart = (e: React.DragEvent, type: DragType, index: number) => {
+  const handleDragStart = (e: React.DragEvent, type: any, index: number) => {
     setDraggingItem({ type, index });
     e.dataTransfer.setData("application/json", JSON.stringify({ type, index }));
     e.dataTransfer.effectAllowed = "move";
@@ -629,11 +890,11 @@ const App: React.FC = () => {
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
 
-  const handleDrop = (e: React.DragEvent, targetType: DragType) => {
+  const handleDrop = (e: React.DragEvent, targetType: any) => {
     e.preventDefault();
     const data = e.dataTransfer.getData("application/json");
     if (!data) return;
-    const source: DragItem = JSON.parse(data);
+    const source = JSON.parse(data);
     if (source.type === targetType) return; 
     const sourceList = source.type === 'input' ? inputImages : referenceImages;
     const imageToMove = sourceList[source.index];
@@ -715,8 +976,7 @@ const App: React.FC = () => {
 
     if (!hasApiKey) {
       await handleApiKeySelect();
-      // Vite requires explicit import.meta.env.VITE_... access
-      const envKey = import.meta.env?.VITE_API_KEY;
+      const envKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
       if (!envKey) {
         const win = window as any;
         if (!win.aistudio || !(await win.aistudio.hasSelectedApiKey())) return;
@@ -819,7 +1079,25 @@ const App: React.FC = () => {
 
   return (
     <div className="lg:h-screen min-h-screen w-full relative bg-[#005060] selection:bg-[#e2b36e] selection:text-[#005060] lg:overflow-hidden overflow-y-auto flex flex-col">
-      {previewImage && <FullScreenViewer src={previewImage} onClose={() => setPreviewImage(null)} />}
+      {previewImage && (
+        <FullScreenViewer 
+            src={previewImage} 
+            onClose={() => setPreviewImage(null)} 
+            onSaveEdit={(newUrl) => {
+                setPreviewImage(newUrl); // Update viewer to show edited image
+                setGeneratedImages(prev => [...prev, newUrl]); // Add to generated list
+                const newRecord: GeneratedImage = {
+                    id: Date.now().toString(),
+                    url: newUrl,
+                    prompt: "Edited Image",
+                    type: MediaType.STANDARD,
+                    timestamp: Date.now()
+                };
+                setHistory(prev => [newRecord, ...prev]);
+                uploadToDrive(newUrl, "Edited_Image");
+            }}
+        />
+      )}
 
       {/* ERROR TOAST */}
       {error && (
@@ -920,15 +1198,15 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col gap-4 mb-6 mt-4 flex-none">
-                   <div className={`border border-dashed rounded-lg p-3 transition-colors flex flex-col h-40 overflow-hidden ${draggingItem?.type === 'input' ? 'border-[#e2b36e] bg-[#e2b36e]/10' : 'border-[#e2b36e]/20 bg-[#e2b36e]/5'}`} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'reference')}>
-                    <div className="flex items-center justify-between mb-2"><label className="text-xs font-medium text-[#e2b36e] flex items-center gap-1.5"><CopyPlus size={12} /> References</label><span className="text-[10px] text-[#e2b36e]/50">{referenceImages.length}/20</span></div>
-                    <div className="flex flex-wrap gap-2 overflow-y-auto custom-scrollbar flex-1 content-start p-2 -m-2 pl-3 pt-3 pr-4"><button onClick={() => refInputRef.current?.click()} disabled={referenceImages.length >= 20} className={`h-14 w-14 flex-none rounded border border-dashed flex items-center justify-center transition-all ${referenceImages.length >= 20 ? 'opacity-50 cursor-not-allowed' : 'border-[#e2b36e]/30 text-[#e2b36e] hover:bg-[#e2b36e]/10'}`}><Plus size={20} /></button><input type="file" ref={refInputRef} className="hidden" onChange={handleRefUpload} accept="image/*" multiple />{referenceImages.map((img, index) => (<div key={`ref-${index}`} className="relative group h-14 w-14 flex-none cursor-move" draggable onDragStart={(e) => handleDragStart(e, 'reference', index)}><div className="h-full w-full rounded overflow-hidden border border-[#e2b36e]/30 relative"><img src={img} alt={`Ref ${index}`} className="h-full w-full object-cover select-none" draggable={false} /><div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); setPreviewImage(img); }} className="p-1 hover:text-[#e2b36e] text-white transition-colors drop-shadow-md" title="View Fullscreen"><Maximize size={16} /></button></div></div><button onClick={(e) => { e.stopPropagation(); removeImage('ref', index); }} className="absolute -top-2 -right-2 p-1 bg-red-500 hover:bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10 scale-90 hover:scale-100 w-6 h-6 flex items-center justify-center" title="Remove"><X size={14} /></button></div>))}</div>
-                    <div className="mt-2 text-[10px] text-[#e2b36e]/40 text-center italic select-none">Drag Input Images here to use as Reference</div>
+                   <div className={`border border-dashed rounded-lg p-2.5 transition-colors flex flex-col h-32 overflow-hidden ${draggingItem?.type === 'input' ? 'border-[#e2b36e] bg-[#e2b36e]/10' : 'border-[#e2b36e]/20 bg-[#e2b36e]/5'}`} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'reference')}>
+                    <div className="flex items-center justify-between mb-1"><label className="text-xs font-medium text-[#e2b36e] flex items-center gap-1.5"><CopyPlus size={12} /> References</label><span className="text-[10px] text-[#e2b36e]/50">{referenceImages.length}/20</span></div>
+                    <div className="flex flex-wrap gap-2 overflow-y-auto custom-scrollbar flex-1 content-start p-1 -m-1 pl-2 pt-2 pr-2"><button onClick={() => refInputRef.current?.click()} disabled={referenceImages.length >= 20} className={`h-14 w-14 flex-none rounded border border-dashed flex items-center justify-center transition-all ${referenceImages.length >= 20 ? 'opacity-50 cursor-not-allowed' : 'border-[#e2b36e]/30 text-[#e2b36e] hover:bg-[#e2b36e]/10'}`}><Plus size={20} /></button><input type="file" ref={refInputRef} className="hidden" onChange={handleRefUpload} accept="image/*" multiple />{referenceImages.map((img, index) => (<div key={`ref-${index}`} className="relative group h-14 w-14 flex-none cursor-move" draggable onDragStart={(e) => handleDragStart(e, 'reference', index)}><div className="h-full w-full rounded overflow-hidden border border-[#e2b36e]/30 relative"><img src={img} alt={`Ref ${index}`} className="h-full w-full object-cover select-none" draggable={false} /><div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); setPreviewImage(img); }} className="p-1 hover:text-[#e2b36e] text-white transition-colors drop-shadow-md" title="View Fullscreen"><Maximize size={16} /></button></div></div><button onClick={(e) => { e.stopPropagation(); removeImage('ref', index); }} className="absolute -top-2 -right-2 p-1 bg-red-500 hover:bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10 scale-90 hover:scale-100 w-6 h-6 flex items-center justify-center" title="Remove"><X size={14} /></button></div>))}</div>
+                    <div className="mt-1 text-[10px] text-[#e2b36e]/40 text-center italic select-none">Drag Input Images here to use as Reference</div>
                   </div>
-                  <div className={`border border-dashed rounded-lg p-3 transition-colors flex flex-col h-40 overflow-hidden ${draggingItem?.type === 'reference' ? 'border-[#e2b36e] bg-[#e2b36e]/10' : 'border-[#e2b36e]/20 bg-[#e2b36e]/5'}`} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'input')}>
-                    <div className="flex items-center justify-between mb-2"><label className="text-xs font-medium text-[#e2b36e] flex items-center gap-1.5"><ImageIcon size={12} /> {isArchModeActive ? 'Input Sketch' : 'Input Image'}</label><span className="text-[10px] text-[#e2b36e]/50">{inputImages.length}/10</span></div>
-                    <div className="flex flex-wrap gap-2 overflow-y-auto custom-scrollbar flex-1 content-start p-2 -m-2 pl-3 pt-3 pr-4"><button onClick={() => inputInputRef.current?.click()} disabled={inputImages.length >= 10} className={`h-14 w-14 flex-none rounded border border-dashed flex items-center justify-center transition-all ${inputImages.length >= 10 ? 'opacity-50 cursor-not-allowed' : 'border-[#e2b36e]/30 text-[#e2b36e] hover:bg-[#e2b36e]/10'}`}><Plus size={20} /></button><input type="file" ref={inputInputRef} className="hidden" onChange={handleInputUpload} accept="image/*" multiple />{inputImages.map((img, index) => (<div key={`input-${index}`} className="relative group h-14 w-14 flex-none cursor-move" draggable onDragStart={(e) => handleDragStart(e, 'input', index)}><div className="h-full w-full rounded overflow-hidden border border-[#e2b36e]/30 relative"><img src={img} alt={`Input ${index}`} className="h-full w-full object-cover select-none" draggable={false} /><div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); setPreviewImage(img); }} className="p-1 hover:text-[#e2b36e] text-white transition-colors drop-shadow-md" title="View Fullscreen"><Maximize size={16} /></button></div></div><button onClick={(e) => { e.stopPropagation(); removeImage('input', index); }} className="absolute -top-2 -right-2 p-1 bg-red-500 hover:bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10 scale-90 hover:scale-100 w-6 h-6 flex items-center justify-center" title="Remove"><X size={14} /></button></div>))}</div>
-                    <div className="mt-2 text-[10px] text-[#e2b36e]/40 text-center italic select-none">Drag Refs here to use as Base</div>
+                  <div className={`border border-dashed rounded-lg p-2.5 transition-colors flex flex-col h-32 overflow-hidden ${draggingItem?.type === 'reference' ? 'border-[#e2b36e] bg-[#e2b36e]/10' : 'border-[#e2b36e]/20 bg-[#e2b36e]/5'}`} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'input')}>
+                    <div className="flex items-center justify-between mb-1"><label className="text-xs font-medium text-[#e2b36e] flex items-center gap-1.5"><ImageIcon size={12} /> {isArchModeActive ? 'Input Sketch' : 'Input Image'}</label><span className="text-[10px] text-[#e2b36e]/50">{inputImages.length}/10</span></div>
+                    <div className="flex flex-wrap gap-2 overflow-y-auto custom-scrollbar flex-1 content-start p-1 -m-1 pl-2 pt-2 pr-2"><button onClick={() => inputInputRef.current?.click()} disabled={inputImages.length >= 10} className={`h-14 w-14 flex-none rounded border border-dashed flex items-center justify-center transition-all ${inputImages.length >= 10 ? 'opacity-50 cursor-not-allowed' : 'border-[#e2b36e]/30 text-[#e2b36e] hover:bg-[#e2b36e]/10'}`}><Plus size={20} /></button><input type="file" ref={inputInputRef} className="hidden" onChange={handleInputUpload} accept="image/*" multiple />{inputImages.map((img, index) => (<div key={`input-${index}`} className="relative group h-14 w-14 flex-none cursor-move" draggable onDragStart={(e) => handleDragStart(e, 'input', index)}><div className="h-full w-full rounded overflow-hidden border border-[#e2b36e]/30 relative"><img src={img} alt={`Input ${index}`} className="h-full w-full object-cover select-none" draggable={false} /><div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); setPreviewImage(img); }} className="p-1 hover:text-[#e2b36e] text-white transition-colors drop-shadow-md" title="View Fullscreen"><Maximize size={16} /></button></div></div><button onClick={(e) => { e.stopPropagation(); removeImage('input', index); }} className="absolute -top-2 -right-2 p-1 bg-red-500 hover:bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10 scale-90 hover:scale-100 w-6 h-6 flex items-center justify-center" title="Remove"><X size={14} /></button></div>))}</div>
+                    <div className="mt-1 text-[10px] text-[#e2b36e]/40 text-center italic select-none">Drag Refs here to use as Base</div>
                   </div>
                 </div>
 
@@ -961,7 +1239,6 @@ const App: React.FC = () => {
                           placeholder="••••••••••"
                           className="w-full bg-[#e2b36e]/5 border border-[#e2b36e]/10 rounded-lg px-3 py-2 text-sm text-[#e2b36e] focus:outline-none focus:border-[#e2b36e]/30 transition-colors placeholder-[#e2b36e]/10"
                         />
-                         {/* Drive Script URL Input - REMOVED AS REQUESTED, HARDCODED IN STATE */}
                     </div>
                 </div>
               
