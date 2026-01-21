@@ -1279,8 +1279,8 @@ const App: React.FC = () => {
       {/* New padding: px-6 md:px-12 lg:px-20 xl:px-28 */}
       <div className="flex-1 w-full max-w-[1920px] mx-auto px-6 md:px-12 lg:px-20 xl:px-28 flex flex-col lg:flex-row gap-16 relative z-10 h-auto">
           
-          {/* LEFT TOOL COLUMN: Reduced min-h to 60vh */}
-          <GlassCard className="w-full lg:w-[360px] xl:w-[420px] shrink-0 flex-none flex flex-col p-5 lg:p-6 min-h-[60vh]">
+          {/* LEFT TOOL COLUMN: Reduced min-h to 55vh */}
+          <GlassCard className="w-full lg:w-[360px] xl:w-[420px] shrink-0 flex-none flex flex-col p-5 lg:p-6 min-h-[55vh]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 flex-none">
                    <div className="relative" ref={typeDropdownRef}>
                     <label className={`block text-xs font-semibold mb-1.5 flex items-center gap-1.5 transition-colors duration-300 ${isGraphicModeActive ? 'text-[#e2b36e] drop-shadow-[0_0_8px_rgba(226,179,110,0.5)]' : 'text-[#e2b36e]/60'}`}><Palette size={12} /> Graphic Design Mode</label>
@@ -1302,7 +1302,7 @@ const App: React.FC = () => {
                    </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mb-6 flex-none">
+                <div className="grid grid-cols-3 gap-3 mb-2 flex-none">
                   <div className="relative" ref={ratioDropdownRef}>
                      <label className={`block text-[10px] font-semibold mb-1.5 flex items-center gap-1.5 truncate ${isRatioActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/60'}`}><Ratio size={10} /> Ratio</label>
                      <button onClick={() => setIsRatioDropdownOpen(!isRatioDropdownOpen)} className={`w-full p-3 rounded-lg flex items-center justify-between border transition-all ${isRatioActive ? activeButtonStyle : inactiveButtonStyle}`}><div className="flex items-center gap-2 truncate">{isRatioActive && <RatioIcon ratio={selectedAspectRatio} />}<span className="truncate text-sm font-medium">{isRatioActive ? ASPECT_RATIOS.find(r => r.value === selectedAspectRatio)?.label : 'Select'}</span></div><ChevronDown size={14} className={isRatioActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/30'} /></button>
@@ -1326,7 +1326,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-4 mb-6 mt-4 flex-none">
+                <div className="flex flex-col gap-4 mb-6 mt-1 flex-none">
                    <div className={`border border-dashed rounded-lg p-2.5 transition-colors flex flex-col h-32 overflow-hidden ${draggingItem?.type === 'input' ? 'border-[#e2b36e] bg-[#e2b36e]/10' : 'border-[#e2b36e]/20 bg-[#e2b36e]/5'}`} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'reference')}>
                     <div className="flex items-center justify-between mb-1"><label className="text-xs font-medium text-[#e2b36e] flex items-center gap-1.5"><CopyPlus size={12} /> References</label><span className="text-[10px] text-[#e2b36e]/50">{referenceImages.length}/20</span></div>
                     <div className="flex flex-wrap gap-2 overflow-y-auto custom-scrollbar flex-1 content-start p-1 -m-1 pl-2 pt-2 pr-2"><button onClick={() => refInputRef.current?.click()} disabled={referenceImages.length >= 20} className={`h-14 w-14 flex-none rounded border border-dashed flex items-center justify-center transition-all ${referenceImages.length >= 20 ? 'opacity-50 cursor-not-allowed' : 'border-[#e2b36e]/30 text-[#e2b36e] hover:bg-[#e2b36e]/10'}`}><Plus size={20} /></button><input type="file" ref={refInputRef} className="hidden" onChange={handleRefUpload} accept="image/*" multiple />{referenceImages.map((img, index) => (<div key={`ref-${index}`} className="relative group h-14 w-14 flex-none cursor-move" draggable onDragStart={(e) => handleDragStart(e, 'reference', index)}><div className="h-full w-full rounded overflow-hidden border border-[#e2b36e]/30 relative"><img src={img} alt={`Ref ${index}`} className="h-full w-full object-cover select-none" draggable={false} /><div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); setPreviewImage(img); setPreviewSource('ref'); }} className="p-1 hover:text-[#e2b36e] text-white transition-colors drop-shadow-md" title="View Fullscreen"><Maximize size={16} /></button></div></div><button onClick={(e) => { e.stopPropagation(); removeImage('ref', index); }} className="absolute -top-2 -right-2 p-1 bg-red-500 hover:bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10 scale-90 hover:scale-100 w-6 h-6 flex items-center justify-center" title="Remove"><X size={14} /></button></div>))}</div>
@@ -1397,8 +1397,8 @@ const App: React.FC = () => {
           </GlassCard>
 
           <div className="w-full lg:flex-1 h-auto flex flex-col gap-6 min-w-0">
-              {/* RESULT AREA: Reduced min-h to 40vh */}
-              <GlassCard className="flex-1 w-full flex flex-col relative overflow-hidden min-h-[40vh] shrink-0">
+              {/* RESULT AREA: Reduced min-h to 35vh */}
+              <GlassCard className="flex-1 w-full flex flex-col relative overflow-hidden min-h-[35vh] shrink-0">
                   <div className="absolute top-0 left-0 w-40 h-40 pointer-events-none rounded-tl-2xl border-t-[1px] border-l-[1px] border-[#e2b36e]/40 shadow-[0_0_30px_rgba(226,179,110,0.2)]" style={{maskImage: 'radial-gradient(circle at top left, black 0%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at top left, black 0%, transparent 80%)'}}></div>
                   <div className="absolute bottom-0 right-0 w-40 h-40 pointer-events-none rounded-br-2xl border-b-[1px] border-r-[1px] border-[#e2b36e]/40 shadow-[0_0_30px_rgba(226,179,110,0.2)]" style={{maskImage: 'radial-gradient(circle at bottom right, black 0%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at bottom right, black 0%, transparent 80%)'}}></div>
                   <div className="absolute inset-6 flex items-center justify-center">
@@ -1437,7 +1437,8 @@ const App: React.FC = () => {
                   </div>
               </GlassCard>
 
-              <GlassCard className="w-full flex-none h-28 min-h-[7rem] shrink-0 p-4 flex flex-col mb-8 lg:mb-0">
+              {/* HISTORY AREA: Increased height to h-40 */}
+              <GlassCard className="w-full flex-none h-40 min-h-[10rem] shrink-0 p-4 flex flex-col mb-8 lg:mb-0">
                   <div className="flex-none flex items-center justify-between mb-3">
                      <div className="flex items-center gap-2 text-xs font-semibold text-[#e2b36e]/60 uppercase tracking-widest"><HistoryIcon size={12} /> Recent Generations</div>
                      {history.length > 0 && (<button onClick={clearHistory} className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 hover:underline"><Trash2 size={10} /> Clear All</button>)}
@@ -1458,8 +1459,8 @@ const App: React.FC = () => {
           </div>
       </div>
         
-      {/* FOOTER: Increased margin top to mt-28 */}
-      <footer className="flex-none w-full text-center py-4 text-[#e2b36e]/40 text-sm font-medium uppercase tracking-widest opacity-80 hover:opacity-100 transition-opacity duration-500 select-none mt-28 pb-8 flex flex-col items-center gap-3">
+      {/* FOOTER: Increased margin top to mt-36 */}
+      <footer className="flex-none w-full text-center py-4 text-[#e2b36e]/40 text-sm font-medium uppercase tracking-widest opacity-80 hover:opacity-100 transition-opacity duration-500 select-none mt-36 pb-8 flex flex-col items-center gap-3">
           {/* ONLINE USER BADGE */}
           <div className="scale-90 opacity-80 mb-1">
              <OnlineUserCounter />
