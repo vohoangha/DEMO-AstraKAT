@@ -705,10 +705,10 @@ const AILoader: React.FC<{ progress: number; small?: boolean }> = ({ progress, s
          {/* Glow Effect - Gold/Brown */}
          <div className="absolute inset-0 bg-[#e2b36e]/40 blur-xl rounded-full animate-pulse"></div>
          
-         {/* 4-Pointed Star SVG - ASTRA Theme */}
+         {/* 4-Pointed Star SVG - ASTRA Theme - Increased size to 80x80 */}
          <svg 
-            width="40" 
-            height="40" 
+            width="80" 
+            height="80" 
             viewBox="0 0 100 100" 
             className="animate-pulse drop-shadow-[0_0_10px_rgba(226,179,110,0.8)]"
             xmlns="http://www.w3.org/2000/svg"
@@ -1278,7 +1278,7 @@ const App: React.FC = () => {
       <div className="flex-1 w-full max-w-[1920px] mx-auto p-4 lg:p-6 pt-0 flex flex-col lg:flex-row gap-6 relative z-10 h-auto">
           
           {/* LEFT TOOL COLUMN: Removed internal scroll, allowing page to handle height */}
-          <GlassCard className="w-full lg:w-[450px] lg:min-w-[450px] lg:max-w-[450px] shrink-0 flex-none flex flex-col p-4 lg:p-6 h-auto">
+          <GlassCard className="w-full lg:w-[30%] xl:w-[450px] lg:min-w-[300px] shrink-0 flex-none flex flex-col p-4 lg:p-6 h-auto">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 flex-none">
                    <div className="relative" ref={typeDropdownRef}>
                     <label className={`block text-xs font-semibold mb-1.5 flex items-center gap-1.5 transition-colors duration-300 ${isGraphicModeActive ? 'text-[#e2b36e] drop-shadow-[0_0_8px_rgba(226,179,110,0.5)]' : 'text-[#e2b36e]/60'}`}><Palette size={12} /> Graphic Design Mode</label>
