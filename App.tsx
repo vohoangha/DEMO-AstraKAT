@@ -135,11 +135,6 @@ const FullScreenViewer: React.FC<{
   const [editAutoLoading, setEditAutoLoading] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   
-  // NEW: Edit Quality State
-  const [editQuality, setEditQuality] = useState<ImageQuality>(ImageQuality.AUTO);
-  const [isEditQualityDropdownOpen, setIsEditQualityDropdownOpen] = useState(false);
-  const editQualityRef = useRef<HTMLDivElement>(null);
-  
   const dragStartRef = useRef({ x: 0, y: 0 });
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -161,19 +156,6 @@ const FullScreenViewer: React.FC<{
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose]);
-
-  // Handle Edit Quality Dropdown click outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (editQualityRef.current && !editQualityRef.current.contains(event.target as Node)) {
-        setIsEditQualityDropdownOpen(false);
-      }
-    };
-    if(isEditQualityDropdownOpen) {
-        document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isEditQualityDropdownOpen]);
 
 
   // --- CANVAS LOGIC ---
@@ -334,7 +316,7 @@ const FullScreenViewer: React.FC<{
       const maskBase64 = maskCanvas.toDataURL('image/png');
 
       // 2. Call API with Quality
-      const editedUrl = await editCreativeAsset(src, maskBase64, editPrompt, editQuality);
+      const editedUrl = await editCreativeAsset(src, maskBase64, editPrompt, ImageQuality.AUTO);
       if (onSaveEdit && editedUrl) {
         onSaveEdit(editedUrl);
         // Clean up UI for sequential editing
@@ -668,35 +650,8 @@ const FullScreenViewer: React.FC<{
                           )}
                       </div>
                       
-                      {/* GENERATE BUTTON AND QUALITY DROPDOWN CONTAINER */}
+                      {/* GENERATE BUTTON */}
                       <div className="absolute right-3 bottom-3 z-10 flex items-center gap-2">
-                           {/* QUALITY SELECTION DROPDOWN */}
-                           <div className="relative" ref={editQualityRef}>
-                              <button 
-                                onClick={() => setIsEditQualityDropdownOpen(!isEditQualityDropdownOpen)}
-                                className="h-full px-3 py-2 rounded-lg bg-[#005060] border border-[#e2b36e]/30 text-[#e2b36e] text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-[#003b46] transition-colors shadow-lg"
-                                title="Output Quality"
-                              >
-                                 <Sparkles size={12} />
-                                 {editQuality}
-                                 <ChevronDown size={12} className={`transition-transform duration-200 ${isEditQualityDropdownOpen ? 'rotate-180' : ''}`} />
-                              </button>
-                              
-                              {isEditQualityDropdownOpen && (
-                                <div className="absolute bottom-full right-0 mb-2 w-32 bg-[#003b46]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden p-1 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
-                                   {Object.values(ImageQuality).map((q) => (
-                                     <button 
-                                       key={q} 
-                                       onClick={() => { setEditQuality(q); setIsEditQualityDropdownOpen(false); }} 
-                                       className={`w-full p-2 rounded flex items-center gap-2 text-left text-xs ${editQuality === q ? 'bg-[#e2b36e]/20 text-[#e2b36e] font-bold' : 'text-[#e2b36e]/60 hover:bg-[#e2b36e]/10'}`}
-                                     >
-                                       {q}
-                                     </button>
-                                   ))}
-                                </div>
-                              )}
-                           </div>
-
                            <Button 
                                 onClick={handleEditGenerate} 
                                 isLoading={isEditingLoading}
@@ -1446,9 +1401,48 @@ const App: React.FC = () => {
           {/* RIGHT COLUMN: Flex column to stretch vertically */}
           <div className="w-full lg:flex-1 h-auto flex flex-col gap-6 min-w-0">
               {/* RESULT AREA: FLEX-1 to grow and fill vertical space. Min-height ensures it's never too small. */}
-              <GlassCard className="flex-1 w-full flex flex-col relative overflow-hidden min-h-[400px] shrink-0">
-                  <div className="absolute top-0 left-0 w-40 h-40 pointer-events-none rounded-tl-2xl border-t-[1px] border-l-[1px] border-[#e2b36e]/40 shadow-[0_0_30px_rgba(226,179,110,0.2)]" style={{maskImage: 'radial-gradient(circle at top left, black 0%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at top left, black 0%, transparent 80%)'}}></div>
-                  <div className="absolute bottom-0 right-0 w-40 h-40 pointer-events-none rounded-br-2xl border-b-[1px] border-r-[1px] border-[#e2b36e]/40 shadow-[0_0_30px_rgba(226,179,110,0.2)]" style={{maskImage: 'radial-gradient(circle at bottom right, black 0%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at bottom right, black 0%, transparent 80%)'}}></div>
+              <GlassCard className="flex-1 w-full flex flex-col relative overflow-hidden min-h-[400px] shrink-0 rounded-2xl">
+                  
+                  {/* PREMIUM METAL CORNER - TOP LEFT */}
+                  <div className="absolute -top-[1px] -left-[1px] z-20 pointer-events-none mix-blend-plus-lighter opacity-80">
+                      <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <defs>
+                              <radialGradient id="gradTL" cx="0" cy="0" r="120" gradientUnits="userSpaceOnUse">
+                                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+                                  <stop offset="20%" stopColor="#e2b36e" stopOpacity="0.6" />
+                                  <stop offset="100%" stopColor="#e2b36e" stopOpacity="0" />
+                              </radialGradient>
+                          </defs>
+                          <path 
+                            d="M 1 118 V 20 Q 1 1 20 1 H 118" 
+                            stroke="url(#gradTL)" 
+                            strokeWidth="1.5" 
+                            strokeLinecap="round" 
+                            fill="none"
+                          />
+                      </svg>
+                  </div>
+
+                  {/* PREMIUM METAL CORNER - BOTTOM RIGHT */}
+                  <div className="absolute -bottom-[1px] -right-[1px] z-20 pointer-events-none mix-blend-plus-lighter opacity-80">
+                      <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <defs>
+                              <radialGradient id="gradBR" cx="120" cy="120" r="120" gradientUnits="userSpaceOnUse">
+                                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+                                  <stop offset="20%" stopColor="#e2b36e" stopOpacity="0.6" />
+                                  <stop offset="100%" stopColor="#e2b36e" stopOpacity="0" />
+                              </radialGradient>
+                          </defs>
+                          <path 
+                            d="M 119 2 V 100 Q 119 119 100 119 H 2" 
+                            stroke="url(#gradBR)" 
+                            strokeWidth="1.5" 
+                            strokeLinecap="round" 
+                            fill="none"
+                          />
+                      </svg>
+                  </div>
+
                   <div className="absolute inset-6 flex items-center justify-center">
                       {generatedImages.length === 0 && !loading && (
                         <div className="text-center max-w-md mx-auto relative z-10 select-none">
