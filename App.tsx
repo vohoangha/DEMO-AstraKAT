@@ -1279,8 +1279,8 @@ const App: React.FC = () => {
       {/* New padding: px-6 md:px-12 lg:px-20 xl:px-28 */}
       <div className="flex-1 w-full max-w-[1920px] mx-auto px-6 md:px-12 lg:px-20 xl:px-28 flex flex-col lg:flex-row gap-16 relative z-10 h-auto">
           
-          {/* LEFT TOOL COLUMN: Reduced min-h to 65vh */}
-          <GlassCard className="w-full lg:w-[360px] xl:w-[420px] shrink-0 flex-none flex flex-col p-5 lg:p-6 min-h-[65vh]">
+          {/* LEFT TOOL COLUMN: Reduced min-h to 60vh */}
+          <GlassCard className="w-full lg:w-[360px] xl:w-[420px] shrink-0 flex-none flex flex-col p-5 lg:p-6 min-h-[60vh]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 flex-none">
                    <div className="relative" ref={typeDropdownRef}>
                     <label className={`block text-xs font-semibold mb-1.5 flex items-center gap-1.5 transition-colors duration-300 ${isGraphicModeActive ? 'text-[#e2b36e] drop-shadow-[0_0_8px_rgba(226,179,110,0.5)]' : 'text-[#e2b36e]/60'}`}><Palette size={12} /> Graphic Design Mode</label>
@@ -1397,8 +1397,8 @@ const App: React.FC = () => {
           </GlassCard>
 
           <div className="w-full lg:flex-1 h-auto flex flex-col gap-6 min-w-0">
-              {/* RESULT AREA: Reduced min-h to 45vh */}
-              <GlassCard className="flex-1 w-full flex flex-col relative overflow-hidden min-h-[45vh] shrink-0">
+              {/* RESULT AREA: Reduced min-h to 40vh */}
+              <GlassCard className="flex-1 w-full flex flex-col relative overflow-hidden min-h-[40vh] shrink-0">
                   <div className="absolute top-0 left-0 w-40 h-40 pointer-events-none rounded-tl-2xl border-t-[1px] border-l-[1px] border-[#e2b36e]/40 shadow-[0_0_30px_rgba(226,179,110,0.2)]" style={{maskImage: 'radial-gradient(circle at top left, black 0%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at top left, black 0%, transparent 80%)'}}></div>
                   <div className="absolute bottom-0 right-0 w-40 h-40 pointer-events-none rounded-br-2xl border-b-[1px] border-r-[1px] border-[#e2b36e]/40 shadow-[0_0_30px_rgba(226,179,110,0.2)]" style={{maskImage: 'radial-gradient(circle at bottom right, black 0%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at bottom right, black 0%, transparent 80%)'}}></div>
                   <div className="absolute inset-6 flex items-center justify-center">
@@ -1437,7 +1437,7 @@ const App: React.FC = () => {
                   </div>
               </GlassCard>
 
-              <GlassCard className="w-full flex-none h-32 min-h-[8rem] shrink-0 p-4 flex flex-col mb-8 lg:mb-0">
+              <GlassCard className="w-full flex-none h-28 min-h-[7rem] shrink-0 p-4 flex flex-col mb-8 lg:mb-0">
                   <div className="flex-none flex items-center justify-between mb-3">
                      <div className="flex items-center gap-2 text-xs font-semibold text-[#e2b36e]/60 uppercase tracking-widest"><HistoryIcon size={12} /> Recent Generations</div>
                      {history.length > 0 && (<button onClick={clearHistory} className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 hover:underline"><Trash2 size={10} /> Clear All</button>)}
@@ -1458,8 +1458,8 @@ const App: React.FC = () => {
           </div>
       </div>
         
-      {/* FOOTER: Added mt-16 and pb-8 to push down 3 lines worth */}
-      <footer className="flex-none w-full text-center py-4 text-[#e2b36e]/40 text-sm font-medium uppercase tracking-widest opacity-80 hover:opacity-100 transition-opacity duration-500 select-none mt-16 pb-8 flex flex-col items-center gap-3">
+      {/* FOOTER: Increased margin top to mt-28 */}
+      <footer className="flex-none w-full text-center py-4 text-[#e2b36e]/40 text-sm font-medium uppercase tracking-widest opacity-80 hover:opacity-100 transition-opacity duration-500 select-none mt-28 pb-8 flex flex-col items-center gap-3">
           {/* ONLINE USER BADGE */}
           <div className="scale-90 opacity-80 mb-1">
              <OnlineUserCounter />
