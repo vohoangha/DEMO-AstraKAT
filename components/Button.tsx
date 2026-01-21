@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -15,8 +14,8 @@ export const Button: React.FC<ButtonProps> = React.memo(({
   ...props 
 }) => {
   
-  // Removed 'disabled:opacity-50' to keep the button bright even when disabled
-  const baseStyles = "px-6 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed";
+  // Compact padding (py-2)
+  const baseStyles = "px-6 py-2 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed";
   
   const variants = {
     // Primary updated to Teal gradient
@@ -27,19 +26,18 @@ export const Button: React.FC<ButtonProps> = React.memo(({
     "rainbow-stop": "" // Custom handled below
   };
 
-  // Unified Logic for Rainbow (Generate) and Rainbow-Stop (Stop) to prevent unmounting flicker
+  // Unified Logic for Rainbow (Generate) and Rainbow-Stop (Stop)
   if (variant === 'rainbow' || variant === 'rainbow-stop') {
     const isStop = variant === 'rainbow-stop';
     
-    // KATINAT THEME GRADIENTS
-    // Generate: Gold Spin -> Teal Background
-    // Spin: Gold -> White -> Gold
-    const generateSpinGradient = 'conic-gradient(from 0deg, #b28e67, #ffffff, #b28e67)'; 
+    // KATINAT THEME GRADIENTS - REFINED FOR SMOOTHNESS
+    // Smoother transition: Dark Gold -> Light Gold -> White -> Light Gold -> Dark Gold
+    const generateSpinGradient = 'conic-gradient(from 0deg, #b28e67, #e2b36e, #fff6d9, #e2b36e, #b28e67)'; 
     // Inner: Deep Teal Gradient
     const generateInnerGradient = 'bg-gradient-to-r from-[#005060] to-[#003b46]';
     
     // Stop: Red -> DarkRed -> Red
-    const stopSpinGradient = 'conic-gradient(from 0deg, #dc2626, #7f1d1d, #dc2626)';
+    const stopSpinGradient = 'conic-gradient(from 0deg, #dc2626, #991b1b, #dc2626)';
     const stopInnerGradient = 'bg-gradient-to-r from-red-700 to-red-900';
 
     const currentSpinGradient = isStop ? stopSpinGradient : generateSpinGradient;
@@ -63,20 +61,24 @@ export const Button: React.FC<ButtonProps> = React.memo(({
           }
         `}</style>
 
-        {/* Glow Layer - Gold glow for Generate */}
-        <div className={`absolute -inset-[3px] rounded-xl overflow-hidden blur-xl transition-all duration-500 ${isStop ? 'opacity-40 group-hover:opacity-60 bg-red-600' : 'opacity-40 group-hover:opacity-70 bg-[#b28e67]'}`}>
-             <div className="absolute inset-0 flex items-center justify-center">
-                 <div 
-                   className="w-[300%] aspect-square animate-spin-slow flex-none" 
-                   style={{ 
-                     backgroundImage: currentSpinGradient,
-                   }}
-                 />
-            </div>
+        {/* Glow Layer - FIXED: Masked to button shape to prevent huge square spill */}
+        {/* We use a container with blur-lg and inset-0 */}
+        {/* Inside, we use overflow-hidden to clip the giant spinner to the rounded-xl shape */}
+        <div className={`absolute inset-0 rounded-xl transition-all duration-500 blur-lg ${isStop ? 'opacity-40 group-hover:opacity-60 bg-red-600' : 'opacity-40 group-hover:opacity-70'}`}>
+             <div className="w-full h-full rounded-xl overflow-hidden relative">
+                 <div className="absolute inset-0 flex items-center justify-center">
+                     <div 
+                       className="w-[150%] aspect-square animate-spin-slow flex-none" 
+                       style={{ 
+                         backgroundImage: currentSpinGradient,
+                       }}
+                     />
+                </div>
+             </div>
         </div>
         
-        {/* Border Spin Layer */}
-        <div className="relative rounded-xl overflow-hidden p-[2px] transition-all duration-300">
+        {/* Border Spin Layer - Keeps the sharp button shape */}
+        <div className="relative rounded-xl overflow-hidden p-[1.5px] transition-all duration-300">
             {/* Spinning Border Gradient */}
             <div className="absolute inset-0 flex items-center justify-center">
                  <div 
@@ -88,7 +90,7 @@ export const Button: React.FC<ButtonProps> = React.memo(({
             </div>
             
             {/* Inner Content - Background Color */}
-            <div className={`relative h-full w-full rounded-[9px] px-6 py-3 flex items-center justify-center gap-2 overflow-hidden font-bold tracking-wider shadow-inner z-10 transition-all duration-500 ${currentInnerGradient} ${!isStop && 'group-hover:brightness-110'} ${textColorClass}`}>
+            <div className={`relative h-full w-full rounded-[10px] px-6 py-2 flex items-center justify-center gap-2 overflow-hidden font-bold tracking-wider shadow-inner z-10 transition-all duration-500 ${currentInnerGradient} ${!isStop && 'group-hover:brightness-110'} ${textColorClass}`}>
                 
                 {/* SCAN EFFECT - ONLY FOR STOP BUTTON */}
                 {isStop && (
