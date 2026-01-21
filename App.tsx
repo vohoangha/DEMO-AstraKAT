@@ -657,8 +657,8 @@ const FullScreenViewer: React.FC<{
                                 variant="rainbow"
                                 className="py-2 px-6 text-xs font-bold flex items-center gap-2"
                             >
-                                {/* 4-Pointed Star Icon Inline */}
-                                <svg width="16" height="16" viewBox="0 0 100 100" className="fill-current text-[#002830]">
+                                {/* 4-Pointed Star Icon Inline - Updated to Katinat Gold */}
+                                <svg width="16" height="16" viewBox="0 0 100 100" className="fill-current text-[#e2b36e]">
                                    <path d="M 50 0 C 50 35 60 45 100 50 C 60 55 50 65 50 100 C 50 65 40 55 0 50 C 40 45 50 35 50 0 Z" />
                                 </svg>
                                 {isEditingLoading ? "..." : "Generate"}
@@ -729,9 +729,9 @@ const AILoader: React.FC<{ progress: number; small?: boolean }> = ({ progress, s
          </svg>
       </div>
       
-      {/* Percentage */}
-      <div className="text-center mt-1">
-          <span className="block text-[#e2b36e] font-mono font-bold text-sm leading-none">{Math.round(progress)}%</span>
+      {/* Percentage - Increased to text-2xl */}
+      <div className="text-center mt-3">
+          <span className="block text-[#e2b36e] font-mono font-bold text-2xl leading-none">{Math.round(progress)}%</span>
       </div>
     </div>
   );
@@ -1255,9 +1255,10 @@ const App: React.FC = () => {
       </div>
 
       <header className="flex-none h-24 flex items-center justify-center mb-0 z-20 select-none">
-          <div className="w-full max-w-[1920px] mx-auto px-4 lg:px-6 flex items-center gap-3">
+          {/* Reduced side padding to make content wider */}
+          <div className="w-full max-w-[1920px] mx-auto px-6 md:px-12 lg:px-20 xl:px-28 flex items-center gap-3">
               <div className="relative h-16 w-auto flex-none">
-                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(226,179,110,0.15)_0%,_transparent_70%)] blur-xl"></div>
+                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(226,179,10,0.15)_0%,_transparent_70%)] blur-xl"></div>
                    <img 
                     src="https://drive.google.com/thumbnail?id=1LgeMCeo2P5G2ex6Vo9ONZMBVgEA9kGGR&sz=w500" 
                     alt="ASTRA Logo"
@@ -1274,11 +1275,12 @@ const App: React.FC = () => {
           </div>
       </header>
 
-      {/* MAIN CONTAINER: Removed fixed heights to allow scrolling */}
-      <div className="flex-1 w-full max-w-[1920px] mx-auto p-4 lg:p-6 pt-0 flex flex-col lg:flex-row gap-6 relative z-10 h-auto">
+      {/* MAIN CONTAINER: Decreased padding to reduce empty space on sides */}
+      {/* New padding: px-6 md:px-12 lg:px-20 xl:px-28 */}
+      <div className="flex-1 w-full max-w-[1920px] mx-auto px-6 md:px-12 lg:px-20 xl:px-28 flex flex-col lg:flex-row gap-16 relative z-10 h-auto">
           
-          {/* LEFT TOOL COLUMN: Removed internal scroll, allowing page to handle height */}
-          <GlassCard className="w-full lg:w-[30%] xl:w-[450px] lg:min-w-[300px] shrink-0 flex-none flex flex-col p-4 lg:p-6 h-auto">
+          {/* LEFT TOOL COLUMN: Increased min-h to 85vh to push content down */}
+          <GlassCard className="w-full lg:w-[360px] xl:w-[420px] shrink-0 flex-none flex flex-col p-5 lg:p-6 min-h-[85vh]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 flex-none">
                    <div className="relative" ref={typeDropdownRef}>
                     <label className={`block text-xs font-semibold mb-1.5 flex items-center gap-1.5 transition-colors duration-300 ${isGraphicModeActive ? 'text-[#e2b36e] drop-shadow-[0_0_8px_rgba(226,179,110,0.5)]' : 'text-[#e2b36e]/60'}`}><Palette size={12} /> Graphic Design Mode</label>
@@ -1337,7 +1339,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 flex flex-col gap-2 mb-6 min-h-[120px]">
+                <div className="flex-1 flex flex-col gap-2 mb-6 min-h-[120px] mt-auto">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-semibold text-[#e2b36e]">Prompt</label>
                     {(inputImages.length > 0 || referenceImages.length > 0) && (
@@ -1379,9 +1381,15 @@ const App: React.FC = () => {
                             variant={loading ? "rainbow-stop" : "rainbow"}
                             isLoading={loading}
                             disabled={!loading && (!prompt && inputImages.length === 0 && referenceImages.length === 0)}
-                            className="w-[80%] py-3 text-base font-bold tracking-wide shadow-2xl disabled:opacity-100 disabled:filter-none hover:scale-105 active:scale-95 transition-transform duration-200"
+                            className="w-[90%] py-3 text-sm xl:text-base font-bold tracking-wide shadow-2xl disabled:opacity-100 disabled:filter-none hover:scale-105 active:scale-95 transition-transform duration-200 whitespace-nowrap"
                          >
-                            {loading ? (<><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" className="mr-2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>STOP</>) : (<><svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2 text-[#e2b36e]"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinejoin="round"/></svg>{isArchModeActive ? 'Render Architecture' : 'Generate Design'}</>)}
+                            {loading ? (<><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" className="mr-2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>STOP</>) : (<>
+                                {/* REPLACED SVG WITH 4-POINTED STAR */}
+                                <svg width="20" height="20" viewBox="0 0 100 100" className="w-5 h-5 mr-2 text-[#e2b36e] fill-current">
+                                   <path d="M 50 0 C 50 35 60 45 100 50 C 60 55 50 65 50 100 C 50 65 40 55 0 50 C 40 45 50 35 50 0 Z" />
+                                </svg>
+                                {isArchModeActive ? 'Render Architecture' : 'Generate Design'}
+                            </>)}
                          </Button>
                       </div>
                     )}
@@ -1389,7 +1397,8 @@ const App: React.FC = () => {
           </GlassCard>
 
           <div className="w-full lg:flex-1 h-auto flex flex-col gap-6 min-w-0">
-              <GlassCard className="flex-1 w-full flex flex-col relative overflow-hidden min-h-[500px] shrink-0">
+              {/* RESULT AREA: Increased min-h to 65vh */}
+              <GlassCard className="flex-1 w-full flex flex-col relative overflow-hidden min-h-[65vh] shrink-0">
                   <div className="absolute top-0 left-0 w-40 h-40 pointer-events-none rounded-tl-2xl border-t-[1px] border-l-[1px] border-[#e2b36e]/40 shadow-[0_0_30px_rgba(226,179,110,0.2)]" style={{maskImage: 'radial-gradient(circle at top left, black 0%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at top left, black 0%, transparent 80%)'}}></div>
                   <div className="absolute bottom-0 right-0 w-40 h-40 pointer-events-none rounded-br-2xl border-b-[1px] border-r-[1px] border-[#e2b36e]/40 shadow-[0_0_30px_rgba(226,179,110,0.2)]" style={{maskImage: 'radial-gradient(circle at bottom right, black 0%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at bottom right, black 0%, transparent 80%)'}}></div>
                   <div className="absolute inset-6 flex items-center justify-center">
@@ -1449,7 +1458,8 @@ const App: React.FC = () => {
           </div>
       </div>
         
-      <footer className="flex-none w-full text-center py-4 text-[#e2b36e]/40 text-sm font-medium uppercase tracking-widest opacity-80 hover:opacity-100 transition-opacity duration-500 select-none mt-auto lg:mt-0 flex flex-col items-center gap-3">
+      {/* FOOTER: Added mt-16 and pb-8 to push down 3 lines worth */}
+      <footer className="flex-none w-full text-center py-4 text-[#e2b36e]/40 text-sm font-medium uppercase tracking-widest opacity-80 hover:opacity-100 transition-opacity duration-500 select-none mt-16 pb-8 flex flex-col items-center gap-3">
           {/* ONLINE USER BADGE */}
           <div className="scale-90 opacity-80 mb-1">
              <OnlineUserCounter />
