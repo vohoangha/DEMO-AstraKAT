@@ -1322,8 +1322,8 @@ const App: React.FC = () => {
           </div>
       </header>
 
-      {/* MAIN CONTAINER: Flex-1 to fill space, items-stretch to equal height columns. min-h pushes footer below fold. */}
-      <div className="flex-1 w-full max-w-[1920px] mx-auto px-6 md:px-12 lg:px-20 xl:px-28 flex flex-col lg:flex-row gap-16 relative z-10 items-stretch min-h-[calc(100vh-7rem)]">
+      {/* MAIN CONTAINER: Flex-1 to fill space, items-stretch to equal height columns. min-h pushes footer below fold. pb-24 adds breathing room. */}
+      <div className="flex-1 w-full max-w-[1920px] mx-auto px-6 md:px-12 lg:px-20 xl:px-28 flex flex-col lg:flex-row gap-16 relative z-10 items-stretch min-h-[calc(100vh-7rem)] pb-24">
           
           {/* LEFT TOOL COLUMN: Flex column to stretch vertically */}
           <GlassCard className="w-full lg:w-[360px] xl:w-[420px] shrink-0 flex flex-col p-5 lg:p-6 h-full">
