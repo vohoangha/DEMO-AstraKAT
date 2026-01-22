@@ -1,15 +1,14 @@
-
 import React from 'react';
 import { GlassCard } from './components/GlassCard';
 
 const Maintenance: React.FC = () => {
   return (
-    <div className="h-screen w-full relative bg-[#005060] overflow-hidden flex flex-col items-center justify-center selection:bg-red-500 selection:text-white">
+    <div className="h-screen w-full relative bg-[#103742] overflow-hidden flex flex-col items-center justify-center selection:bg-red-500 selection:text-white">
       
       {/* BACKGROUND - STATIC & GPU ACCELERATED */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none transform-gpu translate-z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-[#125d6e] via-[#005060] to-[#003b46] blur-[120px] opacity-40 will-change-transform"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] rounded-full bg-gradient-to-tl from-[#e2b36e] via-[#b28e67] to-[#005060] blur-[120px] opacity-20 will-change-transform"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-[#1c4e5f] via-[#103742] to-[#09232b] blur-[120px] opacity-40 will-change-transform"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] rounded-full bg-gradient-to-tl from-[#e2b36e] via-[#b28e67] to-[#103742] blur-[120px] opacity-20 will-change-transform"></div>
         
         {/* Added Dark Overlay to match App.tsx */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-black/40 blur-[80px]"></div>
@@ -57,7 +56,7 @@ const Maintenance: React.FC = () => {
             `}</style>
             
             {/* Background Glow */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#005060]/30 to-[#e2b36e]/30 blur-2xl rounded-full animate-pulse"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-[#103742]/30 to-[#e2b36e]/30 blur-2xl rounded-full animate-pulse"></div>
 
             <svg 
                 width="80" 
@@ -68,9 +67,9 @@ const Maintenance: React.FC = () => {
             >
                 <defs>
                     <linearGradient id="astraGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#005060" /> {/* Teal */}
+                        <stop offset="0%" stopColor="#103742" /> {/* Teal */}
                         <stop offset="50%" stopColor="#e2b36e" /> {/* Gold */}
-                        <stop offset="100%" stopColor="#003b46" /> {/* Deep Teal */}
+                        <stop offset="100%" stopColor="#09232b" /> {/* Deep Teal */}
                     </linearGradient>
                 </defs>
                 <path 

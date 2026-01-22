@@ -112,6 +112,16 @@ const OnlineUserCounter: React.FC = () => {
   );
 };
 
+// --- TYPES FOR EDITING ---
+interface ShapeObject {
+    id: string;
+    type: 'rect' | 'circle';
+    x: number;
+    y: number;
+    width: number; 
+    height: number; 
+}
+
 // --- SUB-COMPONENT: FULL SCREEN VIEWER & EDITOR ---
 const FullScreenViewer: React.FC<{ 
     src: string; 
@@ -123,73 +133,230 @@ const FullScreenViewer: React.FC<{
 }> = ({ src, onClose, onSaveEdit, isEditableType, isGenerated, onValidateAccess }) => {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
   const [isMiddlePanning, setIsMiddlePanning] = useState(false); // NEW STATE FOR MIDDLE MOUSE
   
   // EDIT MODE STATES
   const [isEditMode, setIsEditMode] = useState(false);
-  const [editTool, setEditTool] = useState<'brush' | 'rect' | 'circle' | 'move'>('brush'); // Added 'move' tool
-  const [brushSize, setBrushSize] = useState(30); // Default larger brush
+  const [editTool, setEditTool] = useState<'brush' | 'rect' | 'circle' | 'move' | 'eraser'>('brush'); 
+  const [brushSize, setBrushSize] = useState(30); 
+  const [eraserSize, setEraserSize] = useState(30); 
   const [editPrompt, setEditPrompt] = useState('');
   const [isEditingLoading, setIsEditingLoading] = useState(false);
   const [editAutoLoading, setEditAutoLoading] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   
+  // SHAPE MANAGEMENT
+  const [shapes, setShapes] = useState<ShapeObject[]>([]);
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
+  
+  // Interaction State
+  const [interactionState, setInteractionState] = useState<'NONE' | 'DRAWING_SHAPE' | 'DRAGGING_SHAPE' | 'RESIZING_SHAPE' | 'PAINTING' | 'PANNING'>('NONE');
+
   const dragStartRef = useRef({ x: 0, y: 0 });
+  const actionStartRef = useRef({ x: 0, y: 0 }); 
+  const initialShapeRef = useRef<Partial<ShapeObject>>({}); 
+
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   // CANVAS REFS
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const startPosRef = useRef({ x: 0, y: 0 });
-  const snapshotRef = useRef<ImageData | null>(null);
+  const visualCanvasRef = useRef<HTMLCanvasElement>(null); 
+  const paintCanvasRef = useRef<HTMLCanvasElement | null>(null); 
+
+  // ABORT CONTROLLER FOR EDIT
+  const editAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId && !isEditingLoading) {
+          setShapes(prev => prev.filter(s => s.id !== selectedShapeId));
+          setSelectedShapeId(null);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = 'unset';
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, selectedShapeId, isEditingLoading]);
 
 
-  // --- CANVAS LOGIC ---
-  const initCanvas = () => {
+  // --- INITIALIZATION ---
+  const initCanvases = () => {
     const img = imgRef.current;
-    const canvas = canvasRef.current;
+    const canvas = visualCanvasRef.current;
     if (img && canvas) {
-      // Set canvas resolution to match natural image size for high quality
+      // 1. Setup Visual Canvas
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // 2. Setup Paint Canvas (Offscreen) if not exists or size changed
+      if (!paintCanvasRef.current || paintCanvasRef.current.width !== img.naturalWidth) {
+          const pc = document.createElement('canvas');
+          pc.width = img.naturalWidth;
+          pc.height = img.naturalHeight;
+          paintCanvasRef.current = pc;
       }
+      
+      renderCanvas();
     }
   };
 
   useEffect(() => {
     if (isEditMode) {
-      // Removed auto-reset of zoom to allow user to keep zoom level if desired
-      // if (scale !== 1) setScale(1); 
-      // if (position.x !== 0 || position.y !== 0) setPosition({ x: 0, y: 0 });
-      setTimeout(initCanvas, 50);
+      setTimeout(initCanvases, 50);
     }
   }, [isEditMode, src]);
 
+  useEffect(() => {
+      if (isEditMode) renderCanvas();
+  }, [shapes, selectedShapeId, isEditMode]);
+
+  // --- RENDERING LOGIC ---
+  const renderCanvas = () => {
+      const canvas = visualCanvasRef.current;
+      const paintCanvas = paintCanvasRef.current;
+      if (!canvas || !paintCanvas) return;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // 1. Clear
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 2. Draw Paint Layer
+      ctx.drawImage(paintCanvas, 0, 0);
+
+      // 3. Draw Shapes
+      shapes.forEach(shape => {
+          ctx.save();
+          // Use Theme Gold/White for shapes
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; 
+          
+          if (shape.type === 'rect') {
+              ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+          } else if (shape.type === 'circle') {
+              ctx.beginPath();
+              const radiusX = Math.abs(shape.width) / 2;
+              const radiusY = Math.abs(shape.height) / 2;
+              const centerX = shape.x + shape.width / 2;
+              const centerY = shape.y + shape.height / 2;
+              ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+              ctx.fill();
+          }
+          ctx.restore();
+
+          // 4. Draw UI if Selected
+          if (selectedShapeId === shape.id) {
+              drawSelectionUI(ctx, shape);
+          }
+      });
+  };
+
+  const drawSelectionUI = (ctx: CanvasRenderingContext2D, shape: ShapeObject) => {
+      const { x, y, width, height } = shape;
+      const uiScale = 1 / scale; 
+      
+      const handleSize = 45 * uiScale; 
+      const delSize = 45 * uiScale;    
+      const centerSize = 12 * uiScale; 
+      const padding = 2 * uiScale;
+
+      const themeGold = '#e2b36e';
+
+      ctx.save();
+      // Bounding Box
+      ctx.strokeStyle = themeGold; // Gold selection
+      ctx.lineWidth = 2 * uiScale;
+      ctx.setLineDash([6 * uiScale, 4 * uiScale]);
+      ctx.strokeRect(x - padding, y - padding, width + padding*2, height + padding*2);
+      
+      // --- CENTER MOVE HANDLE ---
+      const centerX = x + width / 2;
+      const centerY = y + height / 2;
+      ctx.setLineDash([]);
+      
+      // Center Point Background
+      ctx.fillStyle = themeGold;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, centerSize, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // Center Point Border
+      ctx.strokeStyle = '#09232b'; // Dark Teal contrast
+      ctx.lineWidth = 2 * uiScale;
+      ctx.stroke();
+
+      // --- RESIZE HANDLE (Double Arrow) ---
+      const handleX = x + width;
+      const handleY = y + height;
+      
+      // 1. Circle Background
+      ctx.fillStyle = '#09232b'; // Dark Background
+      ctx.strokeStyle = themeGold;
+      ctx.lineWidth = 2 * uiScale;
+      ctx.beginPath();
+      ctx.arc(handleX, handleY, handleSize / 2, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+
+      // 2. Draw Arrow
+      ctx.strokeStyle = themeGold;
+      ctx.lineWidth = 4 * uiScale; 
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      const arrowR = handleSize / 3.5;
+      
+      ctx.beginPath();
+      ctx.moveTo(handleX - arrowR, handleY - arrowR);
+      ctx.lineTo(handleX + arrowR, handleY + arrowR);
+      
+      ctx.moveTo(handleX + arrowR, handleY + arrowR);
+      ctx.lineTo(handleX + arrowR - arrowR/1.2, handleY + arrowR);
+      ctx.moveTo(handleX + arrowR, handleY + arrowR);
+      ctx.lineTo(handleX + arrowR, handleY + arrowR - arrowR/1.2);
+
+      ctx.moveTo(handleX - arrowR, handleY - arrowR);
+      ctx.lineTo(handleX - arrowR + arrowR/1.2, handleY - arrowR);
+      ctx.moveTo(handleX - arrowR, handleY - arrowR);
+      ctx.lineTo(handleX - arrowR, handleY - arrowR + arrowR/1.2);
+      ctx.stroke();
+
+
+      // --- DELETE BUTTON (X) ---
+      const delX = x + width;
+      const delY = y;
+      
+      // Red Background
+      ctx.fillStyle = '#ef4444'; 
+      ctx.beginPath();
+      ctx.arc(delX, delY, delSize / 2, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // White X
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 4 * uiScale; 
+      const xPad = delSize / 4;
+      ctx.beginPath();
+      ctx.moveTo(delX - xPad, delY - xPad);
+      ctx.lineTo(delX + xPad, delY + xPad);
+      ctx.moveTo(delX + xPad, delY - xPad);
+      ctx.lineTo(delX - xPad, delY + xPad);
+      ctx.stroke();
+
+      ctx.restore();
+  };
+
+  // --- HIT DETECTION ---
   const getCanvasCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
-    const canvas = canvasRef.current;
+    const canvas = visualCanvasRef.current;
     const img = imgRef.current;
     if (!canvas || !img) return { x: 0, y: 0 };
 
-    const rect = img.getBoundingClientRect(); // Use image rect because canvas sits exactly on top
+    const rect = img.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
 
@@ -202,132 +369,331 @@ const FullScreenViewer: React.FC<{
     };
   };
 
-  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isEditMode) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  const checkHit = (x: number, y: number): { type: 'body' | 'resize' | 'delete' | 'none', id: string | null } => {
+      if (selectedShapeId) {
+          const shape = shapes.find(s => s.id === selectedShapeId);
+          if (shape) {
+              const handleHitThreshold = 50 * (1 / scale); 
+              
+              // Resize Handle (Bottom Right)
+              const resX = shape.x + shape.width;
+              const resY = shape.y + shape.height;
+              if (Math.hypot(x - resX, y - resY) < handleHitThreshold) return { type: 'resize', id: shape.id };
 
-    setIsDrawing(true);
+              // Delete Handle (Top Right)
+              const delX = shape.x + shape.width;
+              const delY = shape.y;
+              if (Math.hypot(x - delX, y - delY) < handleHitThreshold) return { type: 'delete', id: shape.id };
+          }
+      }
+
+      for (let i = shapes.length - 1; i >= 0; i--) {
+          const s = shapes[i];
+          if (x >= s.x && x <= s.x + s.width && y >= s.y && y <= s.y + s.height) {
+              return { type: 'body', id: s.id };
+          }
+      }
+
+      return { type: 'none', id: null };
+  };
+
+  // --- MOUSE HANDLERS ---
+
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    const isMiddleClick = 'button' in e && (e as React.MouseEvent).button === 1;
+    if (isMiddleClick) {
+        e.preventDefault();
+        setIsMiddlePanning(true);
+        setInteractionState('PANNING');
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+        dragStartRef.current = { x: clientX - position.x, y: clientY - position.y };
+        return; 
+    }
+
+    if (!isEditMode) {
+        if (scale > 1) {
+            setInteractionState('PANNING');
+            const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+            const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+            dragStartRef.current = { x: clientX - position.x, y: clientY - position.y };
+        }
+        return;
+    }
+
     const { x, y } = getCanvasCoordinates(e);
-    startPosRef.current = { x, y };
+    actionStartRef.current = { x, y };
+
+    // TOOL LOGIC
+    if (editTool === 'move' || editTool === 'rect' || editTool === 'circle') {
+        const hit = checkHit(x, y);
+
+        if (hit.type === 'delete' && hit.id) {
+            setShapes(prev => prev.filter(s => s.id !== hit.id));
+            setSelectedShapeId(null);
+            setInteractionState('NONE');
+            return;
+        }
+
+        if (hit.type === 'resize' && hit.id) {
+            setInteractionState('RESIZING_SHAPE');
+            setSelectedShapeId(hit.id);
+            const s = shapes.find(sh => sh.id === hit.id);
+            if (s) initialShapeRef.current = { ...s };
+            return;
+        }
+
+        if (hit.type === 'body' && hit.id) {
+            setSelectedShapeId(hit.id);
+            setInteractionState('DRAGGING_SHAPE');
+            const s = shapes.find(sh => sh.id === hit.id);
+            if (s) initialShapeRef.current = { ...s };
+            return;
+        }
+
+        if (editTool === 'rect' || editTool === 'circle') {
+            setSelectedShapeId(null); 
+            setInteractionState('DRAWING_SHAPE');
+            const newId = Date.now().toString();
+            const newShape: ShapeObject = {
+                id: newId,
+                type: editTool,
+                x: x,
+                y: y,
+                width: 0,
+                height: 0
+            };
+            setShapes(prev => [...prev, newShape]);
+            setSelectedShapeId(newId); 
+            initialShapeRef.current = { x, y }; 
+            return;
+        }
+        
+        if (editTool === 'move' && scale > 1) {
+             setInteractionState('PANNING');
+             const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+             const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+             dragStartRef.current = { x: clientX - position.x, y: clientY - position.y };
+             return;
+        }
+    } else if (editTool === 'brush' || editTool === 'eraser') {
+        setInteractionState('PAINTING');
+        paint(x, y, true); // Start stroke
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (interactionState === 'PANNING' || isMiddlePanning) {
+        e.preventDefault();
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+        
+        requestAnimationFrame(() => {
+            setPosition({
+                x: clientX - dragStartRef.current.x,
+                y: clientY - dragStartRef.current.y
+            });
+        });
+        return;
+    }
+
+    const { x, y } = getCanvasCoordinates(e);
+
+    // HOVER EFFECTS
+    if (interactionState === 'NONE') {
+        if (!containerRef.current) return;
+        
+        const hit = checkHit(x, y);
+        
+        if (hit.type === 'delete' || hit.type === 'resize') {
+            containerRef.current.style.cursor = 'pointer';
+        } else if (hit.type === 'body') {
+            containerRef.current.style.cursor = 'move';
+        } else {
+            if (editTool === 'move') {
+                containerRef.current.style.cursor = scale > 1 ? 'grab' : 'default';
+            } else if (editTool === 'brush' || editTool === 'eraser') {
+                containerRef.current.style.cursor = 'crosshair';
+            } else {
+                containerRef.current.style.cursor = 'crosshair'; 
+            }
+        }
+        return;
+    }
+
+    // INTERACTION LOGIC
+    if (interactionState === 'PAINTING') {
+        paint(x, y, false);
+    } else if (interactionState === 'DRAWING_SHAPE') {
+        const originX = initialShapeRef.current.x || 0;
+        const originY = initialShapeRef.current.y || 0;
+        
+        setShapes(prev => prev.map(s => {
+            if (s.id === selectedShapeId) {
+                let width = x - originX;
+                let height = y - originY;
+                
+                if (e.shiftKey && s.type === 'rect') {
+                    const max = Math.max(Math.abs(width), Math.abs(height));
+                    width = width < 0 ? -max : max;
+                    height = height < 0 ? -max : max;
+                }
+                if (s.type === 'circle' && e.shiftKey) {
+                     const max = Math.max(Math.abs(width), Math.abs(height));
+                     width = width < 0 ? -max : max;
+                     height = height < 0 ? -max : max;
+                }
+
+                return { ...s, width, height };
+            }
+            return s;
+        }));
+    } else if (interactionState === 'DRAGGING_SHAPE') {
+        const dx = x - actionStartRef.current.x;
+        const dy = y - actionStartRef.current.y;
+        
+        setShapes(prev => prev.map(s => {
+            if (s.id === selectedShapeId) {
+                return {
+                    ...s,
+                    x: (initialShapeRef.current.x || 0) + dx,
+                    y: (initialShapeRef.current.y || 0) + dy
+                };
+            }
+            return s;
+        }));
+    } else if (interactionState === 'RESIZING_SHAPE') {
+        const s = initialShapeRef.current;
+        if (!s) return;
+        
+        const newWidth = x - (s.x || 0);
+        const newHeight = y - (s.y || 0);
+        
+        setShapes(prev => prev.map(curr => {
+            if (curr.id === selectedShapeId) {
+                return { ...curr, width: newWidth, height: newHeight };
+            }
+            return curr;
+        }));
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsMiddlePanning(false);
+    setInteractionState('NONE');
     
-    // Save snapshot for shape tools to avoid trails
-    snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-    if (editTool === 'brush') {
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; // Soft white transparency for visual
-      // Scale brush size relative to image display size vs actual size
-      ctx.lineWidth = brushSize * (canvas.width / imgRef.current!.offsetWidth); 
-    }
+    const ctx = paintCanvasRef.current?.getContext('2d');
+    if (ctx) ctx.beginPath(); 
   };
 
-  const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing || !isEditMode) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  // --- PAINTING HELPER ---
+  const paint = (x: number, y: number, isStart: boolean) => {
+      const ctx = paintCanvasRef.current?.getContext('2d');
+      if (!ctx) return;
 
-    const { x, y } = getCanvasCoordinates(e);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      if (editTool === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.lineWidth = eraserSize; 
+      } else {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.lineWidth = brushSize;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 1)'; 
+      }
 
-    if (editTool === 'brush') {
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    } else if (editTool === 'rect') {
-      if (snapshotRef.current) ctx.putImageData(snapshotRef.current, 0, 0);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      const width = x - startPosRef.current.x;
-      const height = y - startPosRef.current.y;
-      ctx.fillRect(startPosRef.current.x, startPosRef.current.y, width, height);
-    } else if (editTool === 'circle') {
-      if (snapshotRef.current) ctx.putImageData(snapshotRef.current, 0, 0);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.beginPath();
-      const radius = Math.sqrt(Math.pow(x - startPosRef.current.x, 2) + Math.pow(y - startPosRef.current.y, 2));
-      ctx.arc(startPosRef.current.x, startPosRef.current.y, radius, 0, 2 * Math.PI);
-      ctx.fill();
-    }
+      if (isStart) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+      } else {
+          ctx.lineTo(x, y);
+          ctx.stroke();
+      }
+      
+      renderCanvas(); 
   };
 
-  const stopDrawing = () => {
-    setIsDrawing(false);
-    const canvas = canvasRef.current;
-    // Don't clear context here, we want to keep the drawing
-  };
-
+  // --- CLEAR & EXPORT ---
   const clearMask = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx?.clearRect(0, 0, canvas.width, canvas.height);
-      snapshotRef.current = null; // Also clear snapshot
-    }
+      setShapes([]);
+      const ctx = paintCanvasRef.current?.getContext('2d');
+      if (ctx && paintCanvasRef.current) {
+          ctx.clearRect(0, 0, paintCanvasRef.current.width, paintCanvasRef.current.height);
+      }
+      renderCanvas();
   };
 
   // --- EDIT API LOGIC ---
   const handleEditGenerate = async () => {
     if (!editPrompt.trim()) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const imgCanvas = visualCanvasRef.current;
+    if (!imgCanvas) return;
 
     setIsEditingLoading(true);
+    const controller = new AbortController();
+    editAbortControllerRef.current = controller;
+
     try {
-      // 1. Create a binary mask (Black Background, White Foreground)
-      // The visual canvas is white transparent, we need a clean mask for the API
+      // 1. COMPOSITE THE MASK
       const maskCanvas = document.createElement('canvas');
-      maskCanvas.width = canvas.width;
-      maskCanvas.height = canvas.height;
-      const maskCtx = maskCanvas.getContext('2d');
-      if (!maskCtx) throw new Error("Canvas Error");
+      maskCanvas.width = imgCanvas.width;
+      maskCanvas.height = imgCanvas.height;
+      const mCtx = maskCanvas.getContext('2d');
+      if (!mCtx) throw new Error("Canvas Error");
 
-      // Fill black
-      maskCtx.fillStyle = '#000000';
-      maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+      // Fill Black (Background)
+      mCtx.fillStyle = '#000000';
+      mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
 
-      // Draw the user's drawing onto this new canvas, enforcing solid white
-      const visualData = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height);
-      if (visualData) {
-         // Loop pixels: if alpha > 0, make it white. Else keep black.
-         const data = visualData.data;
-         const maskImgData = maskCtx.createImageData(canvas.width, canvas.height);
-         const maskData = maskImgData.data;
-         
-         for(let i=0; i < data.length; i+=4) {
-             const alpha = data[i+3];
-             if (alpha > 10) { // If drew something (even faint)
-                 maskData[i] = 255;   // R
-                 maskData[i+1] = 255; // G
-                 maskData[i+2] = 255; // B
-                 maskData[i+3] = 255; // Alpha
-             } else {
-                 maskData[i] = 0;
-                 maskData[i+1] = 0;
-                 maskData[i+2] = 0;
-                 maskData[i+3] = 255; // Opaque Black
-             }
-         }
-         maskCtx.putImageData(maskImgData, 0, 0);
+      // Draw Paint Layer (Brush Strokes) - White
+      if (paintCanvasRef.current) {
+          mCtx.drawImage(paintCanvasRef.current, 0, 0);
       }
+
+      // Draw Shapes - White
+      mCtx.fillStyle = '#ffffff';
+      shapes.forEach(shape => {
+          mCtx.beginPath();
+          if (shape.type === 'rect') {
+              mCtx.rect(shape.x, shape.y, shape.width, shape.height);
+          } else if (shape.type === 'circle') {
+              const radiusX = Math.abs(shape.width) / 2;
+              const radiusY = Math.abs(shape.height) / 2;
+              const centerX = shape.x + shape.width / 2;
+              const centerY = shape.y + shape.height / 2;
+              mCtx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+          }
+          mCtx.fill();
+      });
       
       const maskBase64 = maskCanvas.toDataURL('image/png');
 
       // 2. Call API with Quality
-      const editedUrl = await editCreativeAsset(src, maskBase64, editPrompt, ImageQuality.AUTO);
+      const editedUrl = await editCreativeAsset(src, maskBase64, editPrompt, ImageQuality.AUTO, controller.signal);
+      
+      if (controller.signal.aborted) return;
+
       if (onSaveEdit && editedUrl) {
         onSaveEdit(editedUrl);
-        // Clean up UI for sequential editing
-        clearMask(); // Clear the red/white drawing
-        setEditPrompt(''); // Clear the prompt
+        clearMask(); 
+        setEditPrompt(''); 
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name === 'AbortError' || e.message === 'Aborted') return;
       console.error(e);
       alert("Edit failed. Please try again.");
     } finally {
-      setIsEditingLoading(false);
+      if (!controller.signal.aborted) setIsEditingLoading(false);
+      editAbortControllerRef.current = null;
+    }
+  };
+
+  const handleStopEdit = () => {
+    if (editAbortControllerRef.current) {
+        editAbortControllerRef.current.abort();
+        setIsEditingLoading(false);
+        editAbortControllerRef.current = null;
     }
   };
 
@@ -361,9 +727,8 @@ const FullScreenViewer: React.FC<{
     }
   };
 
-  // --- VIEW ZOOM LOGIC ---
+  // --- ZOOM HANDLING ---
   const handleZoom = (delta: number) => {
-    // Zoom allowed in edit mode now
     setScale(prev => {
       const newScale = Math.min(Math.max(1, prev + delta), 5);
       if (newScale === 1) setPosition({ x: 0, y: 0 });
@@ -372,107 +737,21 @@ const FullScreenViewer: React.FC<{
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    // Enable zoomwheel in both modes
     e.stopPropagation();
     const delta = e.deltaY > 0 ? -0.2 : 0.2;
     handleZoom(delta);
   };
 
-  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
-    // MIDDLE MOUSE PAN SUPPORT (Button 1)
-    const isMiddleClick = 'button' in e && (e as React.MouseEvent).button === 1;
-
-    if (isMiddleClick) {
-        e.preventDefault();
-        setIsMiddlePanning(true);
-        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-        dragStartRef.current = { x: clientX - position.x, y: clientY - position.y };
-        return; 
-    }
-
-    if (isEditMode) {
-        // If 'move' tool is active, treat as panning
-        if (editTool === 'move') {
-            if (scale > 1) {
-                setIsDragging(true);
-                const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-                const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-                dragStartRef.current = { x: clientX - position.x, y: clientY - position.y };
-            }
-        } else {
-            // Otherwise draw
-            startDrawing(e);
-        }
-    } else {
-        if (scale > 1) {
-            setIsDragging(true);
-            const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-            const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-            dragStartRef.current = { x: clientX - position.x, y: clientY - position.y };
-        }
-    }
-  };
-
-  const animationFrameRef = useRef<number | null>(null);
-
-  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
-    // PRIORITIZE MIDDLE PANNING
-    if (isMiddlePanning) {
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-        animationFrameRef.current = requestAnimationFrame(() => {
-            setPosition({
-                x: clientX - dragStartRef.current.x,
-                y: clientY - dragStartRef.current.y
-            });
-        });
-        return;
-    }
-
-    if (isEditMode && editTool !== 'move') {
-        draw(e);
-    } else {
-        // Handling dragging for View Mode OR Edit Mode (Move Tool)
-        if (isDragging && scale > 1) {
-            if (e.cancelable) e.preventDefault();
-            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-            
-            const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-            const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-
-            animationFrameRef.current = requestAnimationFrame(() => {
-                setPosition({
-                    x: clientX - dragStartRef.current.x,
-                    y: clientY - dragStartRef.current.y
-                });
-            });
-        }
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsMiddlePanning(false); // Stop middle panning
-    
-    if (isEditMode && editTool !== 'move') {
-        stopDrawing();
-    } else {
-        setIsDragging(false);
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    }
-  };
-
   return (
     <div 
-      className="fixed inset-0 z-[100] bg-[#002830]/95 flex flex-col animate-in fade-in duration-300"
+      className="fixed inset-0 z-[100] bg-[#09232b]/95 flex flex-col animate-in fade-in duration-300"
       onWheel={handleWheel}
       // Only close on click if not interacting with UI
       onClick={(e) => { if (e.target === e.currentTarget && !isEditMode) onClose(); }} 
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* HEADER BAR */}
-      <div className="flex-none h-16 w-full px-6 flex justify-between items-center z-50 bg-gradient-to-b from-[#002830] to-[#002830]/0 pointer-events-none">
+      <div className="flex-none h-16 w-full px-6 flex justify-between items-center z-50 bg-gradient-to-b from-[#09232b] to-[#09232b]/0 pointer-events-none">
         <div className="text-[#e2b36e]/80 text-sm flex gap-4 pointer-events-auto items-center">
             {isEditMode ? (
                 <div className="flex items-center gap-2 bg-[#e2b36e]/10 px-3 py-1.5 rounded-full border border-[#e2b36e]/20 backdrop-blur-md">
@@ -488,28 +767,25 @@ const FullScreenViewer: React.FC<{
             )}
         </div>
         <div className="flex items-center gap-2 pointer-events-auto">
-             {/* EDIT BUTTON: Visible for correct types, Checks access on Click */}
              {isEditableType && (
                  <button 
                     onClick={() => {
                         if (isEditMode) {
                             setIsEditMode(false);
-                            setEditTool('brush'); // Reset to brush
+                            setEditTool('brush'); 
                         } else {
-                            // Validate access before enabling edit mode
                             if (onValidateAccess()) {
                                 setIsEditMode(true);
                             }
                         }
                     }}
-                    className={`p-2 rounded-full transition-all duration-300 border ${isEditMode ? 'bg-[#e2b36e] text-[#002830] border-[#e2b36e] shadow-[0_0_15px_#e2b36e]' : 'bg-[#e2b36e]/10 text-[#e2b36e] border-[#e2b36e]/20 hover:bg-[#e2b36e]/20'}`}
+                    className={`p-2 rounded-full transition-all duration-300 border ${isEditMode ? 'bg-[#e2b36e] text-[#09232b] border-[#e2b36e] shadow-[0_0_15px_#e2b36e]' : 'bg-[#e2b36e]/10 text-[#e2b36e] border-[#e2b36e]/20 hover:bg-[#e2b36e]/20'}`}
                     title={isEditMode ? "Exit Edit Mode" : "Edit Image"}
                  >
                     {isEditMode ? <Check className="w-6 h-6" /> : <Edit3 className="w-6 h-6" />}
                  </button>
              )}
              
-             {/* CONDITIONAL DOWNLOAD BUTTON IN VIEWER */}
              {isGenerated && (
                  <button 
                     onClick={() => handleDownload(src)}
@@ -533,36 +809,55 @@ const FullScreenViewer: React.FC<{
       {isEditMode && (
           <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-50 pointer-events-auto animate-in slide-in-from-left fade-in duration-300">
              <GlassCard className="p-3 flex flex-col gap-3">
-                 <button onClick={() => setEditTool('move')} className={`p-2 rounded-lg transition-all relative group ${editTool === 'move' ? 'bg-[#e2b36e] text-[#002830]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Move/Pan">
+                 <button onClick={() => { setEditTool('move'); setSelectedShapeId(null); }} className={`p-2 rounded-lg transition-all relative group ${editTool === 'move' ? 'bg-[#e2b36e] text-[#09232b]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Move/Select">
                     <Hand size={20} />
                  </button>
                  <div className="h-[1px] w-full bg-[#e2b36e]/20 my-1"></div>
-                 <button onClick={() => setEditTool('brush')} className={`p-2 rounded-lg transition-all relative group ${editTool === 'brush' ? 'bg-[#e2b36e] text-[#002830]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Brush">
+                 
+                 {/* BRUSH TOOL & SLIDER */}
+                 <button onClick={() => { setEditTool('brush'); setSelectedShapeId(null); }} className={`p-2 rounded-lg transition-all relative group ${editTool === 'brush' ? 'bg-[#e2b36e] text-[#09232b]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Brush">
                     <Brush size={20} />
                  </button>
-                 
-                 {/* SLIDER POPUP FOR BRUSH SIZE */}
                  {editTool === 'brush' && (
-                     <div className="absolute left-full top-0 ml-3 bg-[#005060]/90 backdrop-blur-md border border-[#e2b36e]/20 rounded-lg p-3 w-32 shadow-xl animate-in slide-in-from-left-2 fade-in">
+                     <div className="absolute left-full top-16 ml-3 bg-[#103742]/90 backdrop-blur-md border border-[#e2b36e]/20 rounded-lg p-3 w-32 shadow-xl animate-in slide-in-from-left-2 fade-in z-50">
                         <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] text-[#e2b36e] uppercase font-bold">Size</span>
+                            <span className="text-[10px] text-[#e2b36e] uppercase font-bold">Brush Size</span>
                             <span className="text-[10px] text-white font-mono">{brushSize}px</span>
                         </div>
                         <input 
-                            type="range" 
-                            min="5" 
-                            max="100" 
-                            value={brushSize} 
+                            type="range" min="5" max="500" value={brushSize} 
                             onChange={(e) => setBrushSize(parseInt(e.target.value))}
                             className="w-full h-1.5 bg-[#e2b36e]/20 rounded-lg appearance-none cursor-pointer accent-[#e2b36e]"
                         />
                      </div>
                  )}
 
-                 <button onClick={() => setEditTool('rect')} className={`p-2 rounded-lg transition-all ${editTool === 'rect' ? 'bg-[#e2b36e] text-[#002830]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Rectangle"><SquareIcon size={20} /></button>
-                 <button onClick={() => setEditTool('circle')} className={`p-2 rounded-lg transition-all ${editTool === 'circle' ? 'bg-[#e2b36e] text-[#002830]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Circle"><CircleIcon size={20} /></button>
+                 {/* ERASER TOOL & SLIDER */}
+                 <button onClick={() => { setEditTool('eraser'); setSelectedShapeId(null); }} className={`p-2 rounded-lg transition-all relative group ${editTool === 'eraser' ? 'bg-[#e2b36e] text-[#09232b]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Eraser Brush">
+                    <Eraser size={20} />
+                 </button>
+                 {editTool === 'eraser' && (
+                     <div className="absolute left-full top-28 ml-3 bg-[#103742]/90 backdrop-blur-md border border-[#e2b36e]/20 rounded-lg p-3 w-32 shadow-xl animate-in slide-in-from-left-2 fade-in z-50">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] text-[#e2b36e] uppercase font-bold">Eraser Size</span>
+                            <span className="text-[10px] text-white font-mono">{eraserSize}px</span>
+                        </div>
+                        <input 
+                            type="range" min="5" max="500" value={eraserSize} 
+                            onChange={(e) => setEraserSize(parseInt(e.target.value))}
+                            className="w-full h-1.5 bg-[#e2b36e]/20 rounded-lg appearance-none cursor-pointer accent-[#e2b36e]"
+                        />
+                     </div>
+                 )}
+
                  <div className="h-[1px] w-full bg-[#e2b36e]/20 my-1"></div>
-                 <button onClick={clearMask} className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors" title="Clear Mask"><Eraser size={20} /></button>
+                 
+                 {/* SHAPES */}
+                 <button onClick={() => { setEditTool('rect'); setSelectedShapeId(null); }} className={`p-2 rounded-lg transition-all ${editTool === 'rect' ? 'bg-[#e2b36e] text-[#09232b]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Rectangle"><SquareIcon size={20} /></button>
+                 <button onClick={() => { setEditTool('circle'); setSelectedShapeId(null); }} className={`p-2 rounded-lg transition-all ${editTool === 'circle' ? 'bg-[#e2b36e] text-[#09232b]' : 'text-[#e2b36e] hover:bg-[#e2b36e]/10'}`} title="Circle"><CircleIcon size={20} /></button>
+                 
+                 <div className="h-[1px] w-full bg-[#e2b36e]/20 my-1"></div>
+                 <button onClick={clearMask} className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors" title="Clear Mask"><Trash2 size={20} /></button>
              </GlassCard>
           </div>
       )}
@@ -586,7 +881,7 @@ const FullScreenViewer: React.FC<{
           alt="Full Screen Preview"
           style={{ 
             transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`, 
-            transition: (isDragging || isDrawing || isMiddlePanning) ? 'none' : 'transform 0.2s ease-out',
+            transition: (interactionState !== 'NONE' || isMiddlePanning) ? 'none' : 'transform 0.2s ease-out',
             maxWidth: '100%',
             maxHeight: '100%',
             objectFit: 'contain'
@@ -596,22 +891,22 @@ const FullScreenViewer: React.FC<{
         />
         {/* CANVAS OVERLAY FOR MASKING */}
         <canvas 
-            ref={canvasRef}
+            ref={visualCanvasRef}
             className={`absolute pointer-events-none will-change-transform ${!isEditMode && 'hidden'}`}
             style={{
                 transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
                 width: imgRef.current?.getBoundingClientRect().width || 'auto',
                 height: imgRef.current?.getBoundingClientRect().height || 'auto',
-                transition: (isDragging || isDrawing || isMiddlePanning) ? 'none' : 'transform 0.2s ease-out',
+                transition: (interactionState !== 'NONE' || isMiddlePanning) ? 'none' : 'transform 0.2s ease-out',
             }}
         />
       </div>
 
       {/* BOTTOM CONTROLS (ZOOM OR PROMPT) - FIXED AT BOTTOM, NO OVERLAP */}
-      <div className="flex-none w-full flex justify-center pb-6 pt-2 bg-gradient-to-t from-[#002830] via-[#002830] to-transparent z-50 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="flex-none w-full flex justify-center pb-6 pt-2 bg-gradient-to-t from-[#09232b] via-[#09232b] to-transparent z-50 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
          {!isEditMode ? (
             /* VIEW MODE CONTROLS */
-            <div className="flex items-center gap-4 bg-[#005060]/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-[#e2b36e]/20 shadow-[0_0_20px_rgba(226,179,110,0.1)]">
+            <div className="flex items-center gap-4 bg-[#103742]/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-[#e2b36e]/20 shadow-[0_0_20px_rgba(226,179,110,0.1)]">
                 <button onClick={() => handleZoom(-0.5)} className="p-2 hover:bg-[#e2b36e]/10 rounded-lg text-[#e2b36e] disabled:opacity-30" disabled={scale <= 1}><ZoomOut className="w-5 h-5" /></button>
                 <span className="text-[#e2b36e] font-mono min-w-[3ch] text-center font-bold">{Math.round(scale * 100)}%</span>
                 <button onClick={() => handleZoom(0.5)} className="p-2 hover:bg-[#e2b36e]/10 rounded-lg text-[#e2b36e] disabled:opacity-30" disabled={scale >= 5}><ZoomIn className="w-5 h-5" /></button>
@@ -633,7 +928,7 @@ const FullScreenViewer: React.FC<{
                               <button 
                                 onClick={handleEditAutoPrompt} 
                                 disabled={editAutoLoading} 
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-lg border border-[#e2b36e]/30 ${editAutoLoading ? 'bg-[#005060] text-[#e2b36e] cursor-wait' : 'bg-[#e2b36e]/20 text-[#e2b36e] hover:bg-[#e2b36e]/30'}`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-lg border border-[#e2b36e]/30 ${editAutoLoading ? 'bg-[#103742] text-[#e2b36e] cursor-wait' : 'bg-[#e2b36e]/20 text-[#e2b36e] hover:bg-[#e2b36e]/30'}`}
                               >
                                   <Sparkles size={12} className={editAutoLoading ? "animate-spin" : ""} />
                                   {editAutoLoading ? 'Reading...' : 'Auto Prompt'}
@@ -642,7 +937,7 @@ const FullScreenViewer: React.FC<{
                               <button 
                                 onClick={handleEditEnhancePrompt} 
                                 disabled={isEnhancing} 
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${isEnhancing ? 'bg-slate-900 border border-white/10 text-white/30 cursor-wait' : 'bg-[#005060] border border-[#e2b36e]/30 text-[#e2b36e] shadow-[0_0_15px_rgba(226,179,110,0.2)] hover:shadow-[0_0_25px_rgba(226,179,110,0.4)] hover:bg-[#003b46]'}`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${isEnhancing ? 'bg-slate-900 border border-white/10 text-white/30 cursor-wait' : 'bg-[#103742] border border-[#e2b36e]/30 text-[#e2b36e] shadow-[0_0_15px_rgba(226,179,110,0.2)] hover:shadow-[0_0_25px_rgba(226,179,110,0.4)] hover:bg-[#0c2e38]'}`}
                               >
                                   <Wand2 size={12} className={isEnhancing ? "animate-spin" : "fill-[#e2b36e]/50"} />
                                   {isEnhancing ? 'Enhancing...' : 'Enhance'}
@@ -650,19 +945,30 @@ const FullScreenViewer: React.FC<{
                           )}
                       </div>
                       
-                      {/* GENERATE BUTTON */}
+                      {/* GENERATE BUTTON - UPDATED TO SUPPORT STOP FUNCTIONALITY */}
                       <div className="absolute right-3 bottom-3 z-10 flex items-center gap-2">
                            <Button 
-                                onClick={handleEditGenerate} 
+                                onClick={isEditingLoading ? handleStopEdit : handleEditGenerate} 
                                 isLoading={isEditingLoading}
-                                variant="rainbow"
-                                className="py-2 px-6 text-xs font-bold flex items-center gap-2"
+                                variant={isEditingLoading ? "rainbow-stop" : "rainbow"}
+                                className="py-2 px-6 text-xs font-bold flex items-center gap-2 min-w-[120px] hover:scale-105 active:scale-95 transition-transform duration-200"
                             >
-                                {/* 4-Pointed Star Icon Inline */}
-                                <svg width="16" height="16" viewBox="0 0 100 100" className="fill-current text-[#e2b36e]">
-                                   <path d="M 50 0 C 50 35 60 45 100 50 C 60 55 50 65 50 100 C 50 65 40 55 0 50 C 40 45 50 35 50 0 Z" />
-                                </svg>
-                                {isEditingLoading ? "..." : "Generate"}
+                                {isEditingLoading ? (
+                                    <>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" className="mr-2">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        </svg>
+                                        STOP
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* 4-Pointed Star Icon Inline */}
+                                        <svg width="16" height="16" viewBox="0 0 100 100" className="fill-current text-[#e2b36e]">
+                                            <path d="M 50 0 C 50 35 60 45 100 50 C 60 55 50 65 50 100 C 50 65 40 55 0 50 C 40 45 50 35 50 0 Z" />
+                                        </svg>
+                                        Generate
+                                    </>
+                                )}
                             </Button>
                       </div>
                   </div>
@@ -1180,7 +1486,7 @@ const App: React.FC = () => {
   const isQualityActive = isQualitySet; 
 
   // Updated Active Style to Teal/Gold
-  const activeButtonStyle = "bg-[#005060]/30 border-[#e2b36e] text-[#e2b36e] shadow-[0_0_15px_rgba(226,179,110,0.2)] ring-1 ring-[#e2b36e]/40";
+  const activeButtonStyle = "bg-[#103742]/30 border-[#e2b36e] text-[#e2b36e] shadow-[0_0_15px_rgba(226,179,110,0.2)] ring-1 ring-[#e2b36e]/40";
   const inactiveButtonStyle = "bg-[#e2b36e]/5 border-[#e2b36e]/10 hover:bg-[#e2b36e]/10 text-[#e2b36e]/60";
   
   // --- NEW SECURITY HANDLER FOR EDIT BUTTON CLICK ---
@@ -1197,7 +1503,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full relative bg-[#005060] selection:bg-[#e2b36e] selection:text-[#005060] flex flex-col">
+    <div className="min-h-screen w-full relative bg-[#103742] selection:bg-[#e2b36e] selection:text-[#103742] flex flex-col">
       {previewImage && (
         <FullScreenViewer 
             src={previewImage} 
@@ -1245,10 +1551,10 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* BACKGROUND UPDATE - KATINAT COLORS */}
+      {/* BACKGROUND UPDATE - KATINAT COLORS (DEEP TEAL) */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none transform-gpu translate-z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-[#125d6e] via-[#005060] to-[#003b46] blur-[120px] opacity-40 will-change-transform"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] rounded-full bg-gradient-to-tl from-[#e2b36e] via-[#b28e67] to-[#005060] blur-[120px] opacity-20 will-change-transform"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-[#1c4e5f] via-[#103742] to-[#09232b] blur-[120px] opacity-40 will-change-transform"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] rounded-full bg-gradient-to-tl from-[#e2b36e] via-[#b28e67] to-[#103742] blur-[120px] opacity-20 will-change-transform"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-black/40 blur-[80px]"></div>
         <div className="absolute inset-0 backdrop-blur-[60px]"></div>
         <div className="absolute inset-0 z-0 opacity-50 mix-blend-overlay" style={{backgroundImage: `repeating-linear-gradient(90deg,rgba(255,255,255,0) 0px,rgba(255,255,255,0.1) 10px,rgba(255,255,255,0.2) 15px,rgba(255,255,255,0.1) 20px,rgba(255,255,255,0) 30px,rgba(0,0,0,0.2) 40px,rgba(0,0,0,0.5) 45px,rgba(0,0,0,0.2) 50px,rgba(0,0,0,0) 60px)`}}></div>
@@ -1287,7 +1593,7 @@ const App: React.FC = () => {
                     <label className={`block text-xs font-semibold mb-1.5 flex items-center gap-1.5 transition-colors duration-300 ${isGraphicModeActive ? 'text-[#e2b36e] drop-shadow-[0_0_8px_rgba(226,179,110,0.5)]' : 'text-[#e2b36e]/60'}`}><Palette size={12} /> Graphic Design Mode</label>
                     <button onClick={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)} className={`w-full p-3 rounded-lg flex items-center justify-between border transition-all duration-300 ${isGraphicModeActive ? activeButtonStyle : inactiveButtonStyle}`}><div className="flex items-center gap-2 truncate"><span className="truncate text-sm font-medium">{selectedType === MediaType.NONE ? 'Select Type' : selectedType}</span></div><ChevronDown size={14} className={isGraphicModeActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/30'} /></button>
                     {isTypeDropdownOpen && (
-                      <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#003b46]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden max-h-60 overflow-y-auto p-1">
+                      <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#09232b]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden max-h-60 overflow-y-auto p-1">
                         {Object.values(MediaType).filter(type => type !== MediaType.NONE).map((type) => (<button key={type} onClick={() => handleTypeSelect(type)} className={`w-full p-2 rounded flex items-center gap-2 text-left text-sm ${selectedType === type && isGraphicModeActive ? 'bg-[#e2b36e]/20 text-[#e2b36e] font-bold' : 'text-[#e2b36e]/60 hover:bg-[#e2b36e]/10'}`}>{getTypeIcon(type)} <span>{type}</span></button>))}
                       </div>
                     )}
@@ -1296,7 +1602,7 @@ const App: React.FC = () => {
                     <label className={`block text-xs font-semibold mb-1.5 flex items-center gap-1.5 transition-colors duration-300 ${isArchModeActive ? 'text-[#e2b36e] drop-shadow-[0_0_8px_rgba(226,179,110,0.5)]' : 'text-[#e2b36e]/60'}`}><Building2 size={12} /> Architecture Render Mode</label>
                     <button onClick={() => setIsArchDropdownOpen(!isArchDropdownOpen)} className={`w-full p-3 rounded-lg flex items-center justify-between border transition-all duration-300 ${isArchModeActive ? activeButtonStyle : inactiveButtonStyle}`}><div className="flex items-center gap-2 truncate"><span className="truncate text-sm font-medium">{selectedArchStyle === ArchitectureStyle.NONE ? 'Select Style' : selectedArchStyle}</span></div><ChevronDown size={14} className={isArchModeActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/30'} /></button>
                     {isArchDropdownOpen && (
-                      <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#003b46]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden max-h-60 overflow-y-auto p-1">
+                      <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#09232b]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden max-h-60 overflow-y-auto p-1">
                         {Object.values(ArchitectureStyle).filter(style => style !== ArchitectureStyle.NONE).map((style) => (<button key={style} onClick={() => handleArchSelect(style)} className={`w-full p-2 rounded flex items-center gap-2 text-left text-sm ${selectedArchStyle === style ? 'bg-[#e2b36e]/20 text-[#e2b36e] font-bold' : 'text-[#e2b36e]/60 hover:bg-[#e2b36e]/10'}`}><span className={`w-1.5 h-1.5 rounded-full ${selectedArchStyle === style ? 'bg-[#e2b36e]' : 'bg-[#e2b36e]/20'}`} /> <span className="truncate">{style}</span></button>))}
                       </div>
                     )}
@@ -1308,21 +1614,21 @@ const App: React.FC = () => {
                      <label className={`block text-[10px] font-semibold mb-1.5 flex items-center gap-1.5 truncate ${isRatioActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/60'}`}><Ratio size={10} /> Ratio</label>
                      <button onClick={() => setIsRatioDropdownOpen(!isRatioDropdownOpen)} className={`w-full p-3 rounded-lg flex items-center justify-between border transition-all ${isRatioActive ? activeButtonStyle : inactiveButtonStyle}`}><div className="flex items-center gap-2 truncate">{isRatioActive && <RatioIcon ratio={selectedAspectRatio} />}<span className="truncate text-sm font-medium">{isRatioActive ? ASPECT_RATIOS.find(r => r.value === selectedAspectRatio)?.label : 'Select'}</span></div><ChevronDown size={14} className={isRatioActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/30'} /></button>
                       {isRatioDropdownOpen && (
-                        <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#003b46]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden p-1 min-w-[120px]">{ASPECT_RATIOS.map((ratio) => (<button key={ratio.value} onClick={() => { setSelectedAspectRatio(ratio.value); setIsRatioAuto(false); setIsRatioDropdownOpen(false); }} className={`w-full p-2 rounded flex items-center justify-between gap-2 text-left text-sm ${selectedAspectRatio === ratio.value ? 'bg-[#e2b36e]/20 text-[#e2b36e] font-bold' : 'text-[#e2b36e]/60 hover:bg-[#e2b36e]/10'}`}><div className="flex items-center gap-2"><RatioIcon ratio={ratio.value} /><span>{ratio.label}</span></div></button>))}</div>
+                        <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#09232b]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden p-1 min-w-[120px]">{ASPECT_RATIOS.map((ratio) => (<button key={ratio.value} onClick={() => { setSelectedAspectRatio(ratio.value); setIsRatioAuto(false); setIsRatioDropdownOpen(false); }} className={`w-full p-2 rounded flex items-center justify-between gap-2 text-left text-sm ${selectedAspectRatio === ratio.value ? 'bg-[#e2b36e]/20 text-[#e2b36e] font-bold' : 'text-[#e2b36e]/60 hover:bg-[#e2b36e]/10'}`}><div className="flex items-center gap-2"><RatioIcon ratio={ratio.value} /><span>{ratio.label}</span></div></button>))}</div>
                       )}
                   </div>
                   <div className="relative" ref={countDropdownRef}>
                      <label className={`block text-[10px] font-semibold mb-1.5 flex items-center gap-1.5 truncate ${isCountActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/60'}`}><Layers size={10} /> Count</label>
                      <button onClick={() => setIsCountDropdownOpen(!isCountDropdownOpen)} className={`w-full p-3 rounded-lg flex items-center justify-between border transition-all ${isCountActive ? activeButtonStyle : inactiveButtonStyle}`}><div className="flex items-center gap-2 truncate"><span className="truncate text-sm font-medium">{isCountActive ? `${imageCount}` : 'Select'}</span></div><ChevronDown size={14} className={isCountActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/30'} /></button>
                       {isCountDropdownOpen && (
-                        <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#003b46]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden p-1 min-w-[100px]">{[1, 2, 4].map((count) => (<button key={count} onClick={() => { setImageCount(count); setIsCountAuto(false); setIsCountDropdownOpen(false); }} className={`w-full p-2 rounded flex items-center gap-2 text-left text-sm ${imageCount === count ? 'bg-[#e2b36e]/20 text-[#e2b36e] font-bold' : 'text-[#e2b36e]/60 hover:bg-[#e2b36e]/10'}`}><span className="font-bold">{count}</span><span className="opacity-70">Image{count > 1 ? 's' : ''}</span></button>))}</div>
+                        <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#09232b]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden p-1 min-w-[100px]">{[1, 2, 4].map((count) => (<button key={count} onClick={() => { setImageCount(count); setIsCountAuto(false); setIsCountDropdownOpen(false); }} className={`w-full p-2 rounded flex items-center gap-2 text-left text-sm ${imageCount === count ? 'bg-[#e2b36e]/20 text-[#e2b36e] font-bold' : 'text-[#e2b36e]/60 hover:bg-[#e2b36e]/10'}`}><span className="font-bold">{count}</span><span className="opacity-70">Image{count > 1 ? 's' : ''}</span></button>))}</div>
                       )}
                   </div>
                   <div className="relative" ref={qualityDropdownRef}>
                      <label className={`block text-[10px] font-semibold mb-1.5 flex items-center gap-1.5 truncate ${isQualityActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/60'}`}><Sparkles size={10} /> Quality</label>
                      <button onClick={() => setIsQualityDropdownOpen(!isQualityDropdownOpen)} className={`w-full p-3 rounded-lg flex items-center justify-between border transition-all ${isQualityActive ? activeButtonStyle : inactiveButtonStyle}`}><div className="flex items-center gap-2 truncate"><span className="truncate text-sm font-medium">{!isQualitySet ? 'Select' : selectedQuality}</span></div><ChevronDown size={14} className={isQualityActive ? 'text-[#e2b36e]' : 'text-[#e2b36e]/30'} /></button>
                       {isQualityDropdownOpen && (
-                        <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#003b46]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden p-1 min-w-[120px]">{Object.values(ImageQuality).map((q) => (<button key={q} onClick={() => { setSelectedQuality(q); setIsQualitySet(true); setIsQualityAuto(false); setIsQualityDropdownOpen(false); }} className={`w-full p-2 rounded flex items-center gap-2 text-left text-sm ${selectedQuality === q ? 'bg-[#e2b36e]/20 text-[#e2b36e] font-bold' : 'text-[#e2b36e]/60 hover:bg-[#e2b36e]/10'}`}><span className="font-medium">{q}</span></button>))}</div>
+                        <div className="absolute top-full left-0 w-full mt-1 z-50 bg-[#09232b]/95 backdrop-blur-xl border border-[#e2b36e]/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3)] overflow-hidden p-1 min-w-[120px]">{Object.values(ImageQuality).map((q) => (<button key={q} onClick={() => { setSelectedQuality(q); setIsQualitySet(true); setIsQualityAuto(false); setIsQualityDropdownOpen(false); }} className={`w-full p-2 rounded flex items-center gap-2 text-left text-sm ${selectedQuality === q ? 'bg-[#e2b36e]/20 text-[#e2b36e] font-bold' : 'text-[#e2b36e]/60 hover:bg-[#e2b36e]/10'}`}><span className="font-medium">{q}</span></button>))}</div>
                       )}
                   </div>
                 </div>
@@ -1341,17 +1647,24 @@ const App: React.FC = () => {
                 </div>
 
                 {/* PROMPT AREA - FLEX-1 TO GROW VERTICALLY */}
-                <div className="flex-1 flex flex-col gap-2 mb-6 min-h-[120px]">
+                <div className="flex-1 flex flex-col gap-2 mb-6 min-h-[150px]">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-semibold text-[#e2b36e]">Prompt</label>
                     {(inputImages.length > 0 || referenceImages.length > 0) && (
-                        <button onClick={handleAutoPrompt} disabled={isAutoPrompting} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all shadow-lg ${isAutoPrompting ? 'bg-[#005060] text-[#e2b36e] cursor-wait' : 'bg-[#e2b36e]/20 text-[#e2b36e] border border-[#e2b36e]/30 hover:bg-[#e2b36e]/30'}`}><Sparkles size={10} className={isAutoPrompting ? "animate-spin" : ""} />{isAutoPrompting ? 'Reading...' : 'Auto Prompt'}</button>
+                        <button onClick={handleAutoPrompt} disabled={isAutoPrompting} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all shadow-lg ${isAutoPrompting ? 'bg-[#103742] text-[#e2b36e] cursor-wait' : 'bg-[#e2b36e]/20 text-[#e2b36e] border border-[#e2b36e]/30 hover:bg-[#e2b36e]/30'}`}><Sparkles size={10} className={isAutoPrompting ? "animate-spin" : ""} />{isAutoPrompting ? 'Reading...' : 'Auto Prompt'}</button>
                     )}
                   </div>
-                  <div className="relative flex-1">
-                    <textarea ref={textAreaRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={isArchModeActive ? "Describe the materials, lighting... Paste images here to upload!" : "Describe your concept... Paste images here directly!"} className="w-full h-full bg-[#e2b36e]/5 border border-[#e2b36e]/10 rounded-lg p-3 text-[#e2b36e] placeholder-[#e2b36e]/30 focus:outline-none focus:ring-2 focus:ring-[#e2b36e]/50 resize-none text-sm leading-relaxed custom-scrollbar pb-8" />
+                  {/* WRAPPER: Holds Border/Bg to ensure absolute button stays inside visible frame */}
+                  <div className="relative flex-1 bg-[#e2b36e]/5 border border-[#e2b36e]/10 rounded-lg transition-all focus-within:ring-2 focus-within:ring-[#e2b36e]/50 focus-within:bg-[#e2b36e]/10">
+                    <textarea 
+                        ref={textAreaRef} 
+                        value={prompt} 
+                        onChange={(e) => setPrompt(e.target.value)} 
+                        placeholder={isArchModeActive ? "Describe the materials, lighting... Paste images here to upload!" : "Describe your concept... Paste images here directly!"} 
+                        className="w-full h-full bg-transparent border-none p-4 text-[#e2b36e] placeholder-[#e2b36e]/30 focus:outline-none focus:ring-0 resize-none text-sm leading-relaxed custom-scrollbar pb-12" 
+                    />
                     {prompt.trim() && (
-                      <button onClick={handleEnhancePrompt} disabled={isEnhancing} className={`absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 z-10 ${isEnhancing ? 'bg-slate-900 border border-white/10 text-white/30 cursor-wait shadow-none' : 'bg-[#005060] border border-[#e2b36e]/30 text-[#e2b36e] shadow-[0_0_15px_rgba(226,179,110,0.2)] hover:shadow-[0_0_25px_rgba(226,179,110,0.4)] hover:bg-[#003b46]'}`}><Wand2 size={11} className={isEnhancing ? "animate-spin" : "fill-[#e2b36e]/50"} />{isEnhancing ? 'Enhancing...' : 'Enhance'}</button>
+                      <button onClick={handleEnhancePrompt} disabled={isEnhancing} className={`absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 z-10 ${isEnhancing ? 'bg-slate-900 border border-white/10 text-white/30 cursor-wait shadow-none' : 'bg-[#103742] border border-[#e2b36e]/30 text-[#e2b36e] shadow-[0_0_15px_rgba(226,179,110,0.2)] hover:shadow-[0_0_25px_rgba(226,179,110,0.4)] hover:bg-[#0c2e38]'}`}><Wand2 size={11} className={isEnhancing ? "animate-spin" : "fill-[#e2b36e]/50"} />{isEnhancing ? 'Enhancing...' : 'Enhance'}</button>
                     )}
                   </div>
                 </div>
@@ -1470,7 +1783,7 @@ const App: React.FC = () => {
                                );
                              } else {
                                return (
-                                 <div key={`load-${i}`} className="relative bg-[#005060]/40 backdrop-blur-md rounded-2xl border border-[#e2b36e]/20 flex items-center justify-center overflow-hidden"><AILoader progress={progress} small={imageCount > 1} /></div>
+                                 <div key={`load-${i}`} className="relative bg-[#103742]/40 backdrop-blur-md rounded-2xl border border-[#e2b36e]/20 flex items-center justify-center overflow-hidden"><AILoader progress={progress} small={imageCount > 1} /></div>
                                );
                              }
                            })}

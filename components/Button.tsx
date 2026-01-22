@@ -18,8 +18,8 @@ export const Button: React.FC<ButtonProps> = React.memo(({
   const baseStyles = "px-6 py-2 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed";
   
   const variants = {
-    // Primary updated to Teal gradient
-    primary: "bg-gradient-to-r from-[#005060] to-[#0a3f4c] text-[#e2b36e] shadow-lg hover:shadow-[#e2b36e]/20 border border-[#e2b36e]/20",
+    // Primary updated to new Deep Teal gradient
+    primary: "bg-gradient-to-r from-[#103742] to-[#0c2e38] text-[#e2b36e] shadow-lg hover:shadow-[#e2b36e]/20 border border-[#e2b36e]/20",
     secondary: "bg-white bg-opacity-20 hover:bg-opacity-30 text-white border border-white border-opacity-20 focus:ring-white",
     glass: "bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md",
     rainbow: "", // Custom handled below
@@ -33,8 +33,8 @@ export const Button: React.FC<ButtonProps> = React.memo(({
     // KATINAT THEME GRADIENTS - REFINED FOR SMOOTHNESS
     // Smoother transition: Dark Gold -> Light Gold -> White -> Light Gold -> Dark Gold
     const generateSpinGradient = 'conic-gradient(from 0deg, #b28e67, #e2b36e, #fff6d9, #e2b36e, #b28e67)'; 
-    // Inner: Deep Teal Gradient
-    const generateInnerGradient = 'bg-gradient-to-r from-[#005060] to-[#003b46]';
+    // Inner: Deep Teal Gradient (Updated)
+    const generateInnerGradient = 'bg-gradient-to-r from-[#103742] to-[#09232b]';
     
     // Stop: Red -> DarkRed -> Red
     const stopSpinGradient = 'conic-gradient(from 0deg, #dc2626, #991b1b, #dc2626)';
@@ -62,8 +62,6 @@ export const Button: React.FC<ButtonProps> = React.memo(({
         `}</style>
 
         {/* Glow Layer - FIXED: Masked to button shape to prevent huge square spill */}
-        {/* We use a container with blur-lg and inset-0 */}
-        {/* Inside, we use overflow-hidden to clip the giant spinner to the rounded-xl shape */}
         <div className={`absolute inset-0 rounded-xl transition-all duration-500 blur-lg ${isStop ? 'opacity-40 group-hover:opacity-60 bg-red-600' : 'opacity-40 group-hover:opacity-70'}`}>
              <div className="w-full h-full rounded-xl overflow-hidden relative">
                  <div className="absolute inset-0 flex items-center justify-center">

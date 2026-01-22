@@ -335,7 +335,8 @@ export const editCreativeAsset = async (
   originalImageUrl: string,
   maskImageUrl: string | null,
   prompt: string,
-  quality: ImageQuality = ImageQuality.AUTO // Added argument to support quality selection
+  quality: ImageQuality = ImageQuality.AUTO, // Added argument to support quality selection
+  signal?: AbortSignal // Added Signal for Stop
 ): Promise<string> => {
   const keys = getApiKeys();
   const apiKey = keys[0];
@@ -343,34 +344,21 @@ export const editCreativeAsset = async (
 
   // --- MODEL & QUALITY SELECTION LOGIC ---
   let effectiveQuality = quality;
-  if (effectiveQuality === ImageQuality.AUTO) {
-      effectiveQuality = ImageQuality.STANDARD;
-  }
-
-  // Model Selection
-  let selectedModel = 'gemini-2.5-flash-image'; 
-  let apiImageSize: string | undefined = undefined; 
   
-  if (effectiveQuality === ImageQuality.STANDARD) {
-      selectedModel = 'gemini-2.5-flash-image';
-      apiImageSize = undefined; // Flash does not support imageSize
+  // FORCE GEMINI 3 PRO FOR EDITING
+  // Flash model is often too weak for complex inpainting. 
+  // We default to Pro for all edit tasks.
+  let selectedModel = 'gemini-3-pro-image-preview'; 
+  let apiImageSize = '1K'; // Default to 1K for Pro model
+  
+  // Map specific qualities if requested, otherwise default to 1K (Standard/Auto)
+  if (effectiveQuality === ImageQuality.Q4K) {
+      apiImageSize = '4K';
+  } else if (effectiveQuality === ImageQuality.Q2K) {
+      apiImageSize = '2K';
   } else {
-      // For HD, 2K, 4K -> Use Nano Banana Pro (Gemini 3 Pro Image)
-      selectedModel = 'gemini-3-pro-image-preview';
-      
-      switch (effectiveQuality) {
-          case ImageQuality.HD:
-              apiImageSize = '1K';
-              break;
-          case ImageQuality.Q2K:
-              apiImageSize = '2K';
-              break;
-          case ImageQuality.Q4K:
-              apiImageSize = '4K';
-              break;
-          default:
-              apiImageSize = '1K';
-      }
+      // Auto, Standard, HD -> 1K
+      apiImageSize = '1K';
   }
 
   const ai = new GoogleGenAI({ apiKey: apiKey });
@@ -399,7 +387,7 @@ export const editCreativeAsset = async (
 
   // 3. Prompt & Instructions
   let qualityInstruction = "";
-  if (effectiveQuality !== ImageQuality.STANDARD) {
+  if (effectiveQuality !== ImageQuality.STANDARD && effectiveQuality !== ImageQuality.AUTO) {
     qualityInstruction = `Resolution Requirement: Render strictly in ${effectiveQuality} resolution. Detailed textures, sharp edges, high fidelity, photorealistic lighting.`;
   }
 
@@ -416,16 +404,19 @@ export const editCreativeAsset = async (
   parts.push({ text: textPrompt });
 
   try {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
       const config: any = {};
-      if (apiImageSize && selectedModel !== 'gemini-2.5-flash-image') {
-          config.imageConfig = { imageSize: apiImageSize };
-      }
+      // 3-Pro model requires imageSize in many cases or defaults safely, but we explicitly set it.
+      config.imageConfig = { imageSize: apiImageSize };
 
       const response = await ai.models.generateContent({
           model: selectedModel,
           contents: { parts: parts },
           config: config
       });
+
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
       if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
           for (const part of response.candidates[0].content.parts) {
@@ -436,6 +427,9 @@ export const editCreativeAsset = async (
       }
       throw new Error("No edited image returned.");
   } catch (e: any) {
+      if (signal?.aborted || e.name === 'AbortError') {
+          throw e; // Re-throw abort to be handled by UI
+      }
       console.error("Edit Error:", e);
       throw new Error(`Edit failed: ${e.message}`);
   }
