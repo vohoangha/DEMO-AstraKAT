@@ -175,6 +175,9 @@ const FullScreenViewer: React.FC<{
     if (!isEditMode) return;
 
     const handlePaste = (e: ClipboardEvent) => {
+        // Prevent shape deletion if pasting text
+        if (document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.tagName === 'INPUT') return;
+
         if (!e.clipboardData) return;
         const items = e.clipboardData.items;
         const newImages: string[] = [];
@@ -212,6 +215,10 @@ const FullScreenViewer: React.FC<{
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     const handleKeyDown = (e: KeyboardEvent) => {
+      // FIX: IGNORE KEYDOWN IF USER IS TYPING IN INPUT OR TEXTAREA
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
       if (e.key === 'Escape') onClose();
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId && !isEditingLoading) {
           setShapes(prev => prev.filter(s => s.id !== selectedShapeId));
@@ -276,10 +283,13 @@ const FullScreenViewer: React.FC<{
       shapes.forEach(shape => {
           ctx.save();
           // Use Theme Gold/White for shapes
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; 
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; 
+          ctx.strokeStyle = '#e2b36e'; // Gold Border
+          ctx.lineWidth = 3 / scale; // Thicker border that scales with zoom
           
           if (shape.type === 'rect') {
               ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+              ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
           } else if (shape.type === 'circle') {
               ctx.beginPath();
               const radiusX = Math.abs(shape.width) / 2;
@@ -288,6 +298,7 @@ const FullScreenViewer: React.FC<{
               const centerY = shape.y + shape.height / 2;
               ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
               ctx.fill();
+              ctx.stroke();
           }
           ctx.restore();
 
@@ -305,15 +316,15 @@ const FullScreenViewer: React.FC<{
       const handleSize = 45 * uiScale; 
       const delSize = 45 * uiScale;    
       const centerSize = 12 * uiScale; 
-      const padding = 2 * uiScale;
+      const padding = 4 * uiScale; // Increased padding
 
       const themeGold = '#e2b36e';
 
       ctx.save();
       // Bounding Box
       ctx.strokeStyle = themeGold; // Gold selection
-      ctx.lineWidth = 2 * uiScale;
-      ctx.setLineDash([6 * uiScale, 4 * uiScale]);
+      ctx.lineWidth = 4 * uiScale; // Thicker Selection Box (Increased from 2)
+      ctx.setLineDash([8 * uiScale, 6 * uiScale]); // Wider dash
       ctx.strokeRect(x - padding, y - padding, width + padding*2, height + padding*2);
       
       // --- CENTER MOVE HANDLE ---
@@ -329,7 +340,7 @@ const FullScreenViewer: React.FC<{
       
       // Center Point Border
       ctx.strokeStyle = '#09232b'; // Dark Teal contrast
-      ctx.lineWidth = 2 * uiScale;
+      ctx.lineWidth = 3 * uiScale;
       ctx.stroke();
 
       // --- RESIZE HANDLE (Double Arrow) ---
@@ -339,7 +350,7 @@ const FullScreenViewer: React.FC<{
       // 1. Circle Background
       ctx.fillStyle = '#09232b'; // Dark Background
       ctx.strokeStyle = themeGold;
-      ctx.lineWidth = 2 * uiScale;
+      ctx.lineWidth = 3 * uiScale;
       ctx.beginPath();
       ctx.arc(handleX, handleY, handleSize / 2, 0, 2 * Math.PI);
       ctx.fill();
@@ -347,7 +358,7 @@ const FullScreenViewer: React.FC<{
 
       // 2. Draw Arrow
       ctx.strokeStyle = themeGold;
-      ctx.lineWidth = 4 * uiScale; 
+      ctx.lineWidth = 5 * uiScale; // Thicker Arrow
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       
@@ -381,7 +392,7 @@ const FullScreenViewer: React.FC<{
       
       // White X
       ctx.strokeStyle = 'white';
-      ctx.lineWidth = 4 * uiScale; 
+      ctx.lineWidth = 5 * uiScale; // Thicker X
       const xPad = delSize / 4;
       ctx.beginPath();
       ctx.moveTo(delX - xPad, delY - xPad);
