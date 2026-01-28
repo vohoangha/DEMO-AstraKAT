@@ -452,25 +452,34 @@ export const editCreativeAsset = async (
   }
 
   // 4. Prompt & Instructions
-  let qualityInstruction = "";
-  if (effectiveQuality === ImageQuality.AUTO || effectiveQuality === ImageQuality.Q2K || effectiveQuality === ImageQuality.Q4K) {
-    qualityInstruction = `Resolution Requirement: Render in high resolution (2K/4K) strictly. Texture details must be sharp, photorealistic, and match the original image. Zero blur. High fidelity.`;
-  }
-
   let refInstruction = "";
   if (referenceImages && referenceImages.length > 0) {
-      refInstruction = `Additional input: ${referenceImages.length} reference image(s) have been provided to guide the style, color, and texture of the edit.`;
+      refInstruction = `
+      I have also provided ${referenceImages.length} additional reference image(s). 
+      Use these reference images to guide the style, texture, content, or object appearance of the edited area.
+      `;
   }
 
-  // Explicitly instruct the model about the mask usage
+  // Updated Prompt to prevent geometric shape bias from the mask
   const textPrompt = `
-  Task: Image Editing / Inpainting.
-  Input: Original image, Mask image (White=Edit, Black=Protect)${referenceImages.length > 0 ? ', and Reference Images' : ''}.
-  Instruction: Edit the white area of the mask in the original image based on this prompt: "${prompt}".
+  Task: High Quality Image Editing / Inpainting.
+  Input:
+  1. The first image is the original.
+  2. The second image is a black-and-white MASK (White = Area to edit, Black = Protect).
+  ${referenceImages.length > 0 ? `3. Subsequent images are Style/Content References.` : ''}
+  
+  Instruction: Edit the content inside the white area of the mask based on this prompt: "${prompt}".
   ${refInstruction}
-  ${qualityInstruction}
-  Ensure seamless blending and realistic lighting.
+
+  CRITICAL INPAINTING RULES:
+  - The white mask defines the EDITABLE REGION, NOT the shape of the object.
+  - IGNORE the geometric shape (rectangle/circle) of the white mask. 
+  - Do NOT generate a rectangular or circular object just because the mask is that shape. 
+  - The generated object must have its natural organic shape and silhouette.
+  - Seamlessly blend with the original surroundings (lighting, perspective, shadows).
+  - Ensure ultra-sharp details, no blurriness.
   `;
+  
   parts.push({ text: textPrompt });
 
   try {
