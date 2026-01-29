@@ -68,7 +68,7 @@ const db = getDatabase(app);
 
 // ==========================================
 // *** CẤU HÌNH DRIVE (QUAN TRỌNG) ***
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyKC7UigaUPX3kzhR3JSVA1-vxjC1wGlyDoCCELiE5f_xmmSu3-VTPD41tjPIUIRabNNA/exec'; 
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxZxBt34DdV5QtoC9sDDxQaUEiTxwqF_jx-TdLikU5wnl9LAvvXHl1BZtsBj6pXWhNsbA/exec'; 
 // ==========================================
 
 
@@ -289,7 +289,10 @@ const FullScreenViewer: React.FC<{
     isEditableType: boolean; // Controls VISIBILITY of the button (Input/Generated vs Ref)
     isGenerated: boolean; // NEW: To control Download button visibility
     onValidateAccess: () => boolean; // Callback to check auth when clicked
-}> = ({ src, onClose, onSaveEdit, isEditableType, isGenerated, onValidateAccess }) => {
+    // Added prompt prop for download handler
+    currentPrompt?: string; 
+    onDownload: (url: string, prompt?: string) => void;
+}> = ({ src, onClose, onSaveEdit, isEditableType, isGenerated, onValidateAccess, currentPrompt, onDownload }) => {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isMiddlePanning, setIsMiddlePanning] = useState(false); // NEW STATE FOR MIDDLE MOUSE
@@ -965,17 +968,6 @@ const FullScreenViewer: React.FC<{
       finally { setIsEnhancing(false); }
   };
 
-  const handleDownload = (url: string) => {
-    if (url) {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `astra-edit-${Date.now()}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-  };
-
   // --- ZOOM HANDLING ---
   const handleZoom = (delta: number) => {
     setScale(prev => {
@@ -1037,7 +1029,7 @@ const FullScreenViewer: React.FC<{
              
              {isGenerated && (
                  <button 
-                    onClick={() => handleDownload(src)}
+                    onClick={() => onDownload(src, currentPrompt)}
                     className="p-2 bg-[#e2b36e]/10 hover:bg-[#e2b36e]/20 rounded-full text-[#e2b36e] transition-colors border border-transparent hover:border-[#e2b36e]/30"
                     title="Download Result"
                  >
@@ -1672,7 +1664,30 @@ const App: React.FC = () => {
     // The Apps Script must be deployed as "Web App" -> "Execute as: Me" -> "Who has access: Anyone"
     try {
        const cleanBase64 = base64Image.split(',')[1]; // Remove data:image/png;base64 prefix
-       const filename = `Astra_${Date.now()}_${promptText.substring(0, 10).replace(/[^a-z0-9]/gi, '_')}.png`;
+       
+       // --- NEW NAMING LOGIC START ---
+       const prefix = "AstraKAT";
+       
+       // Slug
+       const cleanPrompt = (promptText || "Creative-Design")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-zA-Z0-9\s-]/g, "")
+            .trim();
+       const slug = cleanPrompt.split(/\s+/).slice(0, 5).join('-');
+       
+       // Resolution
+       const resolution = selectedQuality === ImageQuality.AUTO ? 'Standard' : selectedQuality;
+       
+       // Date
+       const d = new Date();
+       const dateStr = `${String(d.getDate()).padStart(2, '0')}${String(d.getMonth() + 1).padStart(2, '0')}${d.getFullYear()}`;
+       
+       // ID
+       const id = Math.random().toString(36).substr(2, 6).toUpperCase();
+
+       const filename = `${prefix}_${slug}_${resolution}_${dateStr}_${id}.png`;
+       // --- NEW NAMING LOGIC END ---
 
        // SILENT UPLOAD: No console logs, fire and forget
        await fetch(driveScriptUrl, {
@@ -1684,6 +1699,7 @@ const App: React.FC = () => {
            body: JSON.stringify({
                image: cleanBase64,
                filename: filename,
+               prompt: promptText
                // Folder date logic is handled by the script
            })
        });
@@ -1786,11 +1802,35 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownload = (url: string) => {
+  const handleDownload = (url: string, specificPrompt?: string) => {
     if (url) {
+      // --- NEW NAMING LOGIC START ---
+      const prefix = "AstraKAT";
+       
+      // Slug
+      const promptText = specificPrompt || prompt || "Creative-Design"; // Use specific prompt from history/arg or fallback to current state
+      const cleanPrompt = promptText.normalize("NFD")
+           .replace(/[\u0300-\u036f]/g, "")
+           .replace(/[^a-zA-Z0-9\s-]/g, "")
+           .trim();
+      const slug = cleanPrompt.split(/\s+/).slice(0, 5).join('-');
+      
+      // Resolution
+      const resolution = selectedQuality === ImageQuality.AUTO ? 'Standard' : selectedQuality;
+      
+      // Date
+      const d = new Date();
+      const dateStr = `${String(d.getDate()).padStart(2, '0')}${String(d.getMonth() + 1).padStart(2, '0')}${d.getFullYear()}`;
+      
+      // ID
+      const id = Math.random().toString(36).substr(2, 6).toUpperCase();
+
+      const filename = `${prefix}_${slug}_${resolution}_${dateStr}_${id}.png`;
+      // --- NEW NAMING LOGIC END ---
+
       const link = document.createElement('a');
       link.href = url;
-      link.download = `astra-design-${Date.now()}.png`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1851,6 +1891,9 @@ const App: React.FC = () => {
             // Only show edit button if NOT a reference.
             isEditableType={previewSource !== 'ref'}
             onValidateAccess={handleValidateAccess}
+            // Pass current prompt for download handler
+            currentPrompt={prompt}
+            onDownload={handleDownload}
             onSaveEdit={(newUrl) => {
                 setPreviewImage(newUrl); 
                 setPreviewSource('generated'); 
@@ -2305,7 +2348,7 @@ const App: React.FC = () => {
                                       <div className="bg-black/40 backdrop-blur-md border border-[#e2b36e]/20 rounded-xl p-1.5 flex items-center gap-2 shadow-lg pointer-events-auto">
                                           <button onClick={(e) => { e.stopPropagation(); setPreviewImage(completedUrl); setPreviewSource('generated'); }} className="p-1.5 hover:bg-[#e2b36e]/20 rounded-lg text-[#e2b36e] transition-colors" title="Edit Image"><Edit3 size={16} /></button>
                                           <div className="w-[1px] h-4 bg-[#e2b36e]/20"></div>
-                                          <button onClick={(e) => { e.stopPropagation(); handleDownload(completedUrl); }} className="p-1.5 hover:bg-[#e2b36e]/20 rounded-lg text-[#e2b36e] transition-colors" title="Download"><Download size={16} /></button>
+                                          <button onClick={(e) => { e.stopPropagation(); handleDownload(completedUrl, prompt); }} className="p-1.5 hover:bg-[#e2b36e]/20 rounded-lg text-[#e2b36e] transition-colors" title="Download"><Download size={16} /></button>
                                       </div>
                                   </div>
                                 </div>
@@ -2333,7 +2376,7 @@ const App: React.FC = () => {
                         <div key={item.id} onClick={() => { setGeneratedImages([item.url]); setLoading(false); }} className="relative flex-none h-full aspect-square rounded-lg overflow-hidden border border-[#e2b36e]/20 group hover:border-[#e2b36e] transition-all cursor-pointer select-none" onContextMenu={(e) => e.preventDefault()}>
                             <img src={item.url} alt="History" className="w-full h-full object-cover select-none" draggable={false} />
                             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={(e) => { e.stopPropagation(); handleDownload(item.url); }} className="absolute top-1 left-1 p-1.5 bg-black/60 hover:bg-black/80 rounded-md text-[#e2b36e] backdrop-blur-sm transition-colors" title="Download"><Download size={12}/></button>
+                                <button onClick={(e) => { e.stopPropagation(); handleDownload(item.url, item.prompt); }} className="absolute top-1 left-1 p-1.5 bg-black/60 hover:bg-black/80 rounded-md text-[#e2b36e] backdrop-blur-sm transition-colors" title="Download"><Download size={12}/></button>
                                 <button onClick={(e) => { e.stopPropagation(); deleteHistoryItem(item.id); }} className="absolute top-1 right-1 p-1.5 bg-red-500/80 hover:bg-red-600 rounded-md text-white backdrop-blur-sm transition-colors" title="Delete"><Trash2 size={12}/></button>
                             </div>
                         </div>))
