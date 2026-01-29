@@ -215,10 +215,19 @@ export const generateCreativeAsset = async (
         lightingPrompt = `Lighting Condition: ${getLightingDescription(lighting)}. Strictly apply this lighting atmosphere to the scene.`;
     }
 
+    // UPDATED PROMPT FOR ARCHITECTURAL PRECISION
     enhancedPrompt = `
-    Task: Architectural Visualization / Rendering.
+    Task: Professional Architectural Visualization (Landscape & Exterior Test).
+    
+    CRITICAL RULES FOR INPUT FIDELITY:
+    1. GEOMETRY LOCK: The input image geometry is the GROUND TRUTH. You must NOT alter the shapes, dimensions, perspective, or structural details of the buildings/landscape in the input.
+    2. STYLE APPLICATION: Apply the requested style (${styleGoal}) strictly as a "skin" or "render layer" over the existing geometry. Change materials, lighting, and vegetation textures, but keep the underlying forms identical.
+    3. DETAILS: Preserve all architectural details (window placements, roof lines, pathway shapes) exactly as they appear in the input.
+    4. UNLESS REQUESTED: Do not add or remove structural elements unless explicitly asked in the User Note.
+    
     ${imageInstruction}
-    Goal: Render a photorealistic ${styleGoal} architectural image.
+    
+    Goal: Create a high-fidelity render of the provided scene in ${styleGoal}.
     Style Details: ${styleDetails}. High-end material texturing, realistic lighting, ray-tracing quality.
     ${enginePrompt}
     ${lightingPrompt}
