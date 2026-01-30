@@ -3,12 +3,12 @@ import { GlassCard } from './components/GlassCard';
 
 const Maintenance: React.FC = () => {
   return (
-    <div className="h-screen w-full relative bg-[#103742] overflow-hidden flex flex-col items-center justify-center selection:bg-red-500 selection:text-white">
+    <div className="h-screen w-full relative bg-[#0f172a] overflow-hidden flex flex-col items-center justify-center selection:bg-red-500 selection:text-white">
       
       {/* BACKGROUND - STATIC & GPU ACCELERATED */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none transform-gpu translate-z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-[#1c4e5f] via-[#103742] to-[#09232b] blur-[120px] opacity-40 will-change-transform"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] rounded-full bg-gradient-to-tl from-[#e2b36e] via-[#b28e67] to-[#103742] blur-[120px] opacity-20 will-change-transform"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-[#1e3a8a] via-[#172554] to-[#0f172a] blur-[120px] opacity-40 will-change-transform"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] rounded-full bg-gradient-to-tl from-[#3b82f6] via-[#60a5fa] to-[#0f172a] blur-[120px] opacity-20 will-change-transform"></div>
         
         {/* Added Dark Overlay to match App.tsx */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-black/40 blur-[80px]"></div>
@@ -23,11 +23,11 @@ const Maintenance: React.FC = () => {
       <header className="absolute top-0 left-0 w-full h-24 flex items-center justify-center z-20 select-none">
           <div className="w-full max-w-[1920px] mx-auto px-4 lg:px-6 flex items-center gap-3">
               <div className="relative h-16 w-auto flex-none">
-                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(226,179,110,0.15)_0%,_transparent_70%)] blur-xl"></div>
+                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.15)_0%,_transparent_70%)] blur-xl"></div>
                    <img 
                     src="https://drive.google.com/thumbnail?id=1LgeMCeo2P5G2ex6Vo9ONZMBVgEA9kGGR&sz=w500" 
                     alt="ASTRA Logo"
-                    className="h-full w-auto object-contain relative z-10 drop-shadow-[0_0_15px_rgba(226,179,110,0.2)]"
+                    className="h-full w-auto object-contain relative z-10 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]"
                     onContextMenu={(e) => e.preventDefault()}
                     draggable={false}
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -40,15 +40,15 @@ const Maintenance: React.FC = () => {
           </div>
       </header>
 
-      <GlassCard className="p-12 flex flex-col items-center max-w-2xl mx-4 text-center z-10 relative border-[#e2b36e]/20 shadow-2xl backdrop-blur-2xl">
+      <GlassCard className="p-12 flex flex-col items-center max-w-2xl mx-4 text-center z-10 relative border-white/20 shadow-2xl backdrop-blur-2xl">
         
         {/* GLOWING STAR ANIMATION */}
         <div className="relative flex items-center justify-center mb-8">
             <style>{`
                 @keyframes star-heartbeat {
-                    0% { transform: scale(0.85); opacity: 0.5; filter: drop-shadow(0 0 5px rgba(226,179,110,0.3)); }
-                    50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 15px rgba(226,179,110,0.6)); }
-                    100% { transform: scale(0.85); opacity: 0.5; filter: drop-shadow(0 0 5px rgba(226,179,110,0.3)); }
+                    0% { transform: scale(0.85); opacity: 0.5; filter: drop-shadow(0 0 5px rgba(255,255,255,0.3)); }
+                    50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 15px rgba(255,255,255,0.6)); }
+                    100% { transform: scale(0.85); opacity: 0.5; filter: drop-shadow(0 0 5px rgba(255,255,255,0.3)); }
                 }
                 .animate-star-glow {
                     animation: star-heartbeat 2s infinite ease-in-out;
@@ -56,7 +56,7 @@ const Maintenance: React.FC = () => {
             `}</style>
             
             {/* Background Glow */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#103742]/30 to-[#e2b36e]/30 blur-2xl rounded-full animate-pulse"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-[#1e40af]/30 to-[#ffffff]/30 blur-2xl rounded-full animate-pulse"></div>
 
             <svg 
                 width="80" 
@@ -67,9 +67,9 @@ const Maintenance: React.FC = () => {
             >
                 <defs>
                     <linearGradient id="astraGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#103742" /> {/* Teal */}
-                        <stop offset="50%" stopColor="#e2b36e" /> {/* Gold */}
-                        <stop offset="100%" stopColor="#09232b" /> {/* Deep Teal */}
+                        <stop offset="0%" stopColor="#1e3a8a" /> {/* Blue */}
+                        <stop offset="50%" stopColor="#ffffff" /> {/* White */}
+                        <stop offset="100%" stopColor="#0f172a" /> {/* Navy */}
                     </linearGradient>
                 </defs>
                 <path 
@@ -82,11 +82,11 @@ const Maintenance: React.FC = () => {
             </svg>
         </div>
 
-        <h1 className="text-4xl md:text-5xl font-black text-[#e2b36e] tracking-tighter uppercase mb-6 drop-shadow-lg">
+        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-6 drop-shadow-lg">
             System Maintenance
         </h1>
         
-        <p className="text-lg md:text-xl text-[#e2b36e]/80 font-medium leading-relaxed max-w-lg">
+        <p className="text-lg md:text-xl text-white/80 font-medium leading-relaxed max-w-lg">
             We are currently performing scheduled maintenance and will be back shortly. Thanks for sticking with us!
         </p>
 
@@ -94,7 +94,7 @@ const Maintenance: React.FC = () => {
 
       {/* FOOTER */}
       <footer className="absolute bottom-8 w-full text-center">
-          <p className="text-[#e2b36e]/30 text-xs font-mono uppercase tracking-[0.3em]">
+          <p className="text-white/30 text-xs font-mono uppercase tracking-[0.3em]">
               ASTRA • SYSTEM MAINTENANCE
           </p>
       </footer>

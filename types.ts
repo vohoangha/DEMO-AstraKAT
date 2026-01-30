@@ -13,65 +13,57 @@ export enum MediaType {
 
 export enum ArchitectureStyle {
   NONE = 'None',
+  // Standalone
   STANDARD = 'Standard',
-  
-  // Modern Group
-  MODERN = 'Modern',
-  MINIMALIST = 'Minimalist',
-  JAPANDI = 'Japandi',
-  WABI_SABI = 'Wabi Sabi',
-  SCANDINAVIAN = 'Scandinavian',
-  MID_CENTURY = 'Mid-Century Modern',
-  BAUHAUS = 'Bauhaus',
-  LUXURY = 'Luxury Contemporary',
+  OTHERS = 'Others',
 
-  // Classic Group
-  NEOCLASSIC = 'Neoclassical',
+  // Modern
+  BAUHAUS = 'Bauhaus',
+  JAPANDI = 'Japandi',
+  LUXURY = 'Luxury Contemporary',
+  MID_CENTURY = 'Mid-Century Modern',
+  MINIMALIST = 'Minimalist',
+  MODERN = 'Modern',
+  SCANDINAVIAN = 'Scandinavian',
+  WABI_SABI = 'Wabi Sabi',
+  
+  // Classic
+  ART_DECO = 'Art Deco',
   INDOCHINE = 'Indochine',
   MEDITERRANEAN = 'Mediterranean',
-  ART_DECO = 'Art Deco',
   MOROCCAN = 'Moroccan',
+  NEOCLASSIC = 'Neoclassical',
   VICTORIAN = 'Victorian',
 
-  // Rustic & Nature Group
-  TROPICAL = 'Tropical Resort',
-  FRAME_HOUSE = 'Frame House',
-  FARMHOUSE = 'Farmhouse',
+  // Rustic & Nature
   BRUTALIST = 'Brutalist',
   COTTAGECORE = 'Cottagecore',
+  FARMHOUSE = 'Farmhouse',
+  FRAME_HOUSE = 'Frame House',
+  TROPICAL = 'Tropical Resort',
 
-  // Industrial & Future Group
-  INDUSTRIAL = 'Industrial',
-  FUTURISTIC = 'Futuristic',
+  // Industrial & Future
   CYBERPUNK = 'Cyberpunk',
-
-  OTHERS = 'Others'
-}
-
-export enum ImageQuality {
-  AUTO = 'Auto',
-  STANDARD = 'Standard',
-  HD = 'HD',
-  Q2K = '2K',
-  Q4K = '4K'
+  FUTURISTIC = 'Futuristic',
+  INDUSTRIAL = 'Industrial'
 }
 
 export enum RenderEngine {
   DEFAULT = 'Default',
-  // Interior focused (often used)
-  BLENDER_CYCLES = 'Blender Cycles',
+  // Interior / Ray Tracing
+  BLENDER = 'Blender Cycles',
   CORONA = 'Corona Renderer',
-  MARMOSET = 'Marmoset Toolbag',
   MAXWELL = 'Maxwell Render',
   OCTANE = 'Octane Render',
-  UNREAL = 'Unreal Engine 5',
+  REDSHIFT = 'Redshift',
   VRAY = 'V-Ray',
-  // Architecture/Exterior focused (realtime/large scale)
+  // Exterior / Real-time
   D5 = 'D5 Render',
   ENSCAPE = 'Enscape',
   LUMION = 'Lumion',
-  REDSHIFT = 'Redshift',
-  TWINMOTION = 'Twinmotion'
+  MARMOSET = 'Marmoset Toolbag',
+  TWINMOTION = 'Twinmotion',
+  UNREAL = 'Unreal Engine 5'
 }
 
 export enum LightingSetting {
@@ -83,22 +75,27 @@ export enum LightingSetting {
   GOLDEN_HOUR = 'Golden Hour',
   BLUE_HOUR = 'Blue Hour',
   NIGHT = 'Night',
-  
   // Weather & Environment
   OVERCAST = 'Overcast',
   RAINY = 'Rainy',
   SNOWY = 'Snowy',
   FOGGY = 'Foggy/Misty',
-  
   // Artificial & Indoor
   WARM_INTERIOR = 'Warm Interior',
   STUDIO = 'Studio',
   NEON = 'Neon/Cyberpunk',
-  
   // Mood & Artistic
   CINEMATIC = 'Cinematic',
   MOODY = 'Moody',
   BIOLUMINESCENT = 'Bioluminescent'
+}
+
+export enum ImageQuality {
+  AUTO = 'Auto',
+  STANDARD = 'Standard',
+  HD = 'HD',
+  Q2K = '2K',
+  Q4K = '4K'
 }
 
 export interface GeneratedImage {
@@ -108,6 +105,12 @@ export interface GeneratedImage {
   type: MediaType;
   timestamp: number;
   isEdit?: boolean;
+}
+
+export interface User {
+  username: string;
+  credits: number;
+  avatarUrl: string;
 }
 
 export const ASPECT_RATIOS = [

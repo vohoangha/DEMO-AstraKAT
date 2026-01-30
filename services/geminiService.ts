@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 import { MediaType, ArchitectureStyle, ImageQuality, RenderEngine, LightingSetting } from "../types";
 
@@ -26,34 +27,83 @@ const getDesignContext = (type: MediaType): string => {
   }
 };
 
-// Helper to get rich lighting descriptions
-const getLightingDescription = (setting: LightingSetting): string => {
-  switch (setting) {
+// Helper function to get engine-specific characteristics
+const getEngineCharacteristics = (engine: RenderEngine): string => {
+  switch (engine) {
+    case RenderEngine.BLENDER:
+      return "Render Style: Mimic Blender Cycles. Unbiased path tracing, highly accurate global illumination, soft lighting falloff, physically based shading (BSDF), clean caustics, photorealistic depth of field.";
+    case RenderEngine.CORONA:
+      return "Render Style: Mimic Corona Renderer. Soft and realistic lighting, gentle light falloff, high-quality global illumination, warm and inviting atmosphere suitable for interiors.";
+    case RenderEngine.D5:
+      return "Render Style: Mimic D5 Render. Real-time ray tracing (RTX) look, sharp reflections, vibrant global illumination, modern architectural aesthetic, detailed atmospheric effects (DLSS style sharpness).";
+    case RenderEngine.ENSCAPE:
+      return "Render Style: Mimic Enscape. Real-time architectural visualization style, bright and airy lighting, clear definition of space, simplified but realistic material representation.";
+    case RenderEngine.LUMION:
+      return "Render Style: Mimic Lumion. Rich atmospheric effects, enhanced skies and vegetation, slight saturation boost, polished architectural presentation style.";
+    case RenderEngine.MARMOSET:
+      return "Render Style: Mimic Marmoset Toolbag. High-fidelity real-time PBR rendering, studio-style lighting setup, emphasis on material surface definition (roughness/metallic), crisp product-shot quality, omni-directional lighting.";
+    case RenderEngine.MAXWELL:
+      return "Render Style: Mimic Maxwell Render. Physically correct unbiased rendering, spectral lighting accuracy, film-like exposure, soft realistic shadows, photorealistic light simulation, high dynamic range.";
+    case RenderEngine.OCTANE:
+      return "Render Style: Mimic Octane Render. GPU-accelerated unbiased rendering, high contrast, spectral dispersion, sharp details, vibrant color depth.";
+    case RenderEngine.REDSHIFT:
+      return "Render Style: Mimic Redshift. Production-quality biased rendering, clean and noise-free, versatile lighting capability, sharp texture details.";
+    case RenderEngine.TWINMOTION:
+      return "Render Style: Mimic Twinmotion. Dynamic real-time lighting, high-quality vegetation, soft ambient occlusion, modern visualization look.";
+    case RenderEngine.UNREAL:
+      return "Render Style: Mimic Unreal Engine 5. Lumen global illumination, Nanite geometry detail, real-time photorealism, high dynamic range, cinematic post-processing effects.";
+    case RenderEngine.VRAY:
+      return "Render Style: Mimic V-Ray. Industry-standard photorealism, perfect light bounce calculation, accurate material reflection/refraction, crisp and balanced output.";
+    default:
+      return "Render Style: Professional photorealistic architectural visualization.";
+  }
+};
+
+// Helper function for specific lighting descriptions
+const getLightingDescription = (lighting: LightingSetting): string => {
+  switch (lighting) {
     // Time of Day
-    case LightingSetting.SUNRISE: return "Sunrise lighting, soft warm morning glow, low angle sunlight, long shadows, hopeful atmosphere";
-    case LightingSetting.SUNNY_DAY: return "Sunny Day lighting, bright natural sunlight, clear blue sky, sharp shadows, vibrant colors, high contrast";
-    case LightingSetting.NOON: return "Noon lighting, direct overhead sun, bright and neutral illumination, minimal shadows, energetic and clear";
-    case LightingSetting.GOLDEN_HOUR: return "Golden Hour lighting, rich amber hues, soft diffused sunlight, magical and romantic atmosphere, rim lighting";
-    case LightingSetting.BLUE_HOUR: return "Blue Hour lighting, deep twilight blue tones, city lights beginning to glow, cool and serene atmosphere, cinematic contrast";
-    case LightingSetting.NIGHT: return "Night lighting, dark atmospheric, artificial light sources, high contrast between shadow and light, mysterious";
+    case LightingSetting.SUNRISE:
+      return "Lighting: Sunrise. Soft, warm morning light, long shadows, pastel sky colors, fresh atmosphere.";
+    case LightingSetting.SUNNY_DAY:
+      return "Lighting: Sunny Day. Bright natural daylight, clear blue sky, sharp shadows, high contrast, energetic vibe.";
+    case LightingSetting.NOON:
+      return "Lighting: Noon. Direct overhead sunlight, harsh shadows, bright neutral white balance, maximum visibility.";
+    case LightingSetting.GOLDEN_HOUR:
+      return "Lighting: Golden Hour. Warm golden light, low sun angle, soft diffused shadows, magical and romantic atmosphere.";
+    case LightingSetting.BLUE_HOUR:
+      return "Lighting: Blue Hour. Deep blue twilight sky, mix of cold natural light and warm artificial city lights, serene mood.";
+    case LightingSetting.NIGHT:
+      return "Lighting: Night. Dark night sky, dramatic artificial lighting, high contrast, mysterious mood, emphasis on light sources.";
     
-    // Weather
-    case LightingSetting.OVERCAST: return "Overcast lighting, soft diffused light, no harsh shadows, even illumination, neutral white balance, calm mood";
-    case LightingSetting.RAINY: return "Rainy weather lighting, wet surfaces with reflections, gloomy grey sky, dramatic droplets, moody and atmospheric";
-    case LightingSetting.SNOWY: return "Snowy environment lighting, bright white reflective light, cool color temperature, crisp and clean atmosphere";
-    case LightingSetting.FOGGY: return "Foggy/Misty lighting, volumetric light rays, low visibility depth, ethereal and mysterious atmosphere, soft edges";
-    
-    // Artificial
-    case LightingSetting.WARM_INTERIOR: return "Warm Interior lighting, cozy 3000K artificial light, inviting atmosphere, soft lamp glow, comfortable ambience";
-    case LightingSetting.STUDIO: return "Studio lighting, professional photography setup, 3-point lighting, perfectly controlled shadows, high detail visibility";
-    case LightingSetting.NEON: return "Neon/Cyberpunk lighting, vibrant pink/blue/purple LED lights, high contrast, futuristic and edgy, glowing surfaces";
-    
-    // Mood
-    case LightingSetting.CINEMATIC: return "Cinematic lighting, dramatic light falloff, emphasis on storytelling, color grading, teal and orange contrast, movie-like quality";
-    case LightingSetting.MOODY: return "Moody lighting, low key, deep shadows, emotional, dramatic chiaroscuro, artistic tension";
-    case LightingSetting.BIOLUMINESCENT: return "Bioluminescent lighting, organic glowing elements in darkness, surreal and magical colors, avatar-like atmosphere";
-    
-    default: return "Professional photorealistic lighting";
+    // Weather & Environment
+    case LightingSetting.OVERCAST:
+      return "Lighting: Overcast. Soft diffused light from a giant softbox (the cloud layer), no hard shadows, even exposure, neutral tones.";
+    case LightingSetting.RAINY:
+      return "Lighting: Rainy. Wet surfaces with reflections, moody grey atmosphere, soft overcast light, rain droplets visible.";
+    case LightingSetting.SNOWY:
+      return "Lighting: Snowy. Bright white ambient light reflecting off snow, soft contrast, cold tones, winter atmosphere.";
+    case LightingSetting.FOGGY:
+      return "Lighting: Foggy/Misty. Low visibility, atmospheric depth, soft volumetric light rays, mysterious and ethereal.";
+
+    // Artificial & Indoor
+    case LightingSetting.WARM_INTERIOR:
+      return "Lighting: Warm Interior. Cozy artificial lighting, tungsten (2700K-3000K) color temperature, inviting and comfortable atmosphere.";
+    case LightingSetting.STUDIO:
+      return "Lighting: Studio. Professional studio lighting setup, 3-point lighting, controlled shadows, softbox diffusion, clean look.";
+    case LightingSetting.NEON:
+      return "Lighting: Neon/Cyberpunk. Vibrant neon colors (pink, blue, purple), high contrast, dark background, glowing elements, futuristic vibe.";
+
+    // Mood & Artistic
+    case LightingSetting.CINEMATIC:
+      return "Lighting: Cinematic. Dramatic lighting, high dynamic range, film look, carefully placed highlights and shadows to guide the eye.";
+    case LightingSetting.MOODY:
+      return "Lighting: Moody. Low key lighting, strong shadows, limited light sources, emotional and dramatic atmosphere.";
+    case LightingSetting.BIOLUMINESCENT:
+      return "Lighting: Bioluminescent. Glowing organic light sources, ethereal colors (blues/greens) in a dark environment, magical forest vibe.";
+
+    default:
+      return "Lighting: Balanced, professional architectural lighting enhancing the volume and materials.";
   }
 };
 
@@ -203,19 +253,15 @@ export const generateCreativeAsset = async (
         ? "Follow the User Note strictly for architectural aesthetics"
         : `Apply ${archStyle} aesthetics`;
 
-    // Construct Engine & Lighting Instructions
-    let enginePrompt = "";
-    if (renderEngine !== RenderEngine.DEFAULT) {
-        enginePrompt = `Render Engine Simulation: Mimic the distinct rendering characteristics of ${renderEngine}. Focus on the specific global illumination, material shaders, and camera effects typical of this software.`;
-    }
+    // Engine & Lighting Instructions
+    const engineInstruction = renderEngine !== RenderEngine.DEFAULT 
+        ? getEngineCharacteristics(renderEngine)
+        : "Render Style: Professional photorealistic architectural visualization.";
 
-    let lightingPrompt = "";
-    if (lighting !== LightingSetting.DEFAULT) {
-        // USE RICH DESCRIPTION FROM HELPER
-        lightingPrompt = `Lighting Condition: ${getLightingDescription(lighting)}. Strictly apply this lighting atmosphere to the scene.`;
-    }
+    const lightingInstruction = lighting !== LightingSetting.DEFAULT 
+        ? getLightingDescription(lighting)
+        : "Lighting: Balanced, professional architectural lighting enhancing the volume and materials.";
 
-    // UPDATED PROMPT FOR ARCHITECTURAL PRECISION
     enhancedPrompt = `
     Task: Professional Architectural Visualization (Landscape & Exterior Test).
     
@@ -229,8 +275,8 @@ export const generateCreativeAsset = async (
     
     Goal: Create a high-fidelity render of the provided scene in ${styleGoal}.
     Style Details: ${styleDetails}. High-end material texturing, realistic lighting, ray-tracing quality.
-    ${enginePrompt}
-    ${lightingPrompt}
+    ${engineInstruction}
+    ${lightingInstruction}
     User Note: ${prompt}.
     ${qualityInstruction}
     Composition: Ensure the output fits a ${aspectRatio} aspect ratio.

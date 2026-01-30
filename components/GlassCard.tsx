@@ -10,10 +10,10 @@ export const GlassCard: React.FC<GlassCardProps> = React.memo(({ children, class
   return (
     <div 
       className={`
-        bg-[#103742]/40 
+        bg-[#0f172a]/40 
         backdrop-blur-2xl 
-        border border-[#e2b36e]/20 
-        shadow-[0_0_25px_-5px_rgba(226,179,110,0.15)]
+        border border-white/10 
+        shadow-[0_0_25px_-5px_rgba(255,255,255,0.1)]
         rounded-2xl
         ${className}
       `}
