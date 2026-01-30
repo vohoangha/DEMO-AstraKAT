@@ -9,7 +9,8 @@ const STORAGE_SCRIPT_URL = (import.meta as any).env?.VITE_STORAGE_SCRIPT_URL;
 
 // MÃ BẢO MẬT (Phải khớp với biến APP_SECRET trong Google Apps Script)
 // Bạn nên đặt trong file .env, ví dụ: VITE_APP_SECRET=astra_secure_key_2024
-const APP_SECRET = (import.meta as any).env?.VITE_APP_SECRET || "astra_secure_key_2024";
+// Default is set to match the provided script code. Added trim() for safety.
+const APP_SECRET = ((import.meta as any).env?.VITE_APP_SECRET || "astra_secure_key_2024").trim();
 
 if (!SCRIPT_URL) {
   console.warn("Warning: VITE_GOOGLE_SCRIPT_URL is missing. User features will fail.");
@@ -23,10 +24,12 @@ if (!STORAGE_SCRIPT_URL) {
 const handleApiError = (data: any) => {
     if (data.error) {
         // Change specific error text as requested
-        if (data.error === "Unauthorized: Invalid App Secret") {
+        // Using includes() to be more robust against whitespace or minor variations
+        const errString = String(data.error);
+        if (errString.includes("Invalid App Secret")) {
             throw new Error("Unauthorized: Invalid (500)");
         }
-        throw new Error(data.error);
+        throw new Error(errString);
     }
 };
 
@@ -38,6 +41,9 @@ export const apiService = {
     if (!SCRIPT_URL) throw new Error("Server configuration error: Missing Main Script URL");
 
     try {
+      // Debug log to ensure secret is being sent (will show in console)
+      // console.log("Sending Login Request with Secret:", APP_SECRET ? "******" : "Missing");
+
       const response = await fetch(SCRIPT_URL, {
         method: 'POST',
         headers: { "Content-Type": "text/plain" },
