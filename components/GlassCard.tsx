@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface GlassCardProps {
@@ -10,10 +11,10 @@ export const GlassCard: React.FC<GlassCardProps> = React.memo(({ children, class
   return (
     <div 
       className={`
-        bg-[#0f172a]/40 
+        bg-[#103742]/40 
         backdrop-blur-2xl 
-        border border-white/10 
-        shadow-[0_0_25px_-5px_rgba(255,255,255,0.1)]
+        border border-[#e2b36e]/10 
+        shadow-[0_0_25px_-5px_rgba(226,179,110,0.05)]
         rounded-2xl
         ${className}
       `}

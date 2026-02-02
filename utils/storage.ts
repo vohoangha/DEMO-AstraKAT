@@ -3,13 +3,13 @@ import { User } from '../types';
 
 const COOKIE_NAME = 'astra_user_session';
 const EXPIRY_DAYS = 30;
+const AVATAR_KEY = 'astra_user_avatar_cache';
 
 export const saveUserToCookie = (user: User) => {
   try {
     const expires = new Date();
     expires.setTime(expires.getTime() + (EXPIRY_DAYS * 24 * 60 * 60 * 1000));
     
-    // Encode value to handle special characters safely
     const jsonString = JSON.stringify(user);
     const encodedValue = encodeURIComponent(jsonString);
     
@@ -41,4 +41,21 @@ export const getUserFromCookie = (): User | null => {
 
 export const removeUserCookie = () => {
   document.cookie = `${COOKIE_NAME}=; Max-Age=-99999999; path=/;SameSite=Strict`;
+  try { localStorage.removeItem(AVATAR_KEY); } catch(e){}
+};
+
+export const saveLocalAvatar = (avatarData: string) => {
+    try {
+        localStorage.setItem(AVATAR_KEY, avatarData);
+    } catch (e) {
+        console.warn("LocalStorage quota exceeded or disabled", e);
+    }
+};
+
+export const getLocalAvatar = (): string | null => {
+    try {
+        return localStorage.getItem(AVATAR_KEY);
+    } catch (e) {
+        return null;
+    }
 };

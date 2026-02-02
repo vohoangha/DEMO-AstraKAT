@@ -93,7 +93,6 @@ export enum LightingSetting {
 export enum ImageQuality {
   AUTO = 'Auto',
   STANDARD = 'Standard',
-  HD = 'HD',
   Q2K = '2K',
   Q4K = '4K'
 }
@@ -111,6 +110,11 @@ export interface User {
   username: string;
   credits: number;
   avatarUrl: string;
+  id?: number; 
+  role?: 'admin' | 'user';
+  status?: 'active' | 'banned';
+  team?: string;
+  session_token?: string; // NEW: For Single Session Enforcement
 }
 
 export const ASPECT_RATIOS = [

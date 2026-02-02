@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -5,7 +6,6 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean;
 }
 
-// Optimized with React.memo so the button doesn't re-render unless props change
 export const Button: React.FC<ButtonProps> = React.memo(({ 
   children, 
   variant = 'primary', 
@@ -14,42 +14,36 @@ export const Button: React.FC<ButtonProps> = React.memo(({
   ...props 
 }) => {
   
-  // Compact padding (py-2)
   const baseStyles = "px-6 py-2 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed";
   
   const variants = {
-    // Primary updated to Navy Blue gradient
-    primary: "bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white shadow-lg hover:shadow-white/20 border border-white/20",
+    // Primary: Gradient Gold to Bronze, Dark Teal text for contrast
+    primary: "bg-gradient-to-r from-[#e2b36e] to-[#b28e67] text-[#09232b] shadow-lg hover:shadow-[#e2b36e]/20 border border-[#e2b36e]/20",
     secondary: "bg-white bg-opacity-20 hover:bg-opacity-30 text-white border border-white border-opacity-20 focus:ring-white",
-    glass: "bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md",
-    rainbow: "", // Custom handled below
-    "rainbow-stop": "" // Custom handled below
+    glass: "bg-[#e2b36e]/5 hover:bg-[#e2b36e]/10 text-white border border-[#e2b36e]/10 backdrop-blur-md",
+    rainbow: "", 
+    "rainbow-stop": "" 
   };
 
-  // Unified Logic for Rainbow (Generate) and Rainbow-Stop (Stop)
   if (variant === 'rainbow' || variant === 'rainbow-stop') {
     const isStop = variant === 'rainbow-stop';
     
-    // NAVY THEME GRADIENTS
-    // Smoother transition: Blue -> White -> Blue
-    const generateSpinGradient = 'conic-gradient(from 0deg, #1e40af, #ffffff, #60a5fa, #ffffff, #1e40af)'; 
-    // Inner: Deep Blue Gradient
-    const generateInnerGradient = 'bg-gradient-to-r from-[#1e3a8a] to-[#0f172a]';
+    // Updated gradients to match Gold/Teal theme
+    const generateSpinGradient = 'conic-gradient(from 0deg, #e2b36e, #ffffff, #b28e67, #ffffff, #e2b36e)'; 
+    const generateInnerGradient = 'bg-gradient-to-r from-[#e2b36e] to-[#b28e67]';
     
-    // Stop: Red -> DarkRed -> Red
     const stopSpinGradient = 'conic-gradient(from 0deg, #dc2626, #991b1b, #dc2626)';
     const stopInnerGradient = 'bg-gradient-to-r from-red-700 to-red-900';
 
     const currentSpinGradient = isStop ? stopSpinGradient : generateSpinGradient;
     const currentInnerGradient = isStop ? stopInnerGradient : generateInnerGradient;
     
-    // Text Color: White for both
-    const textColorClass = 'text-white';
+    const textColorClass = isStop ? 'text-white' : 'text-[#09232b]';
 
     return (
       <button 
         className={`relative group rounded-xl ${className} ${isLoading ? 'opacity-90' : ''}`}
-        disabled={isLoading && !isStop} // Allow clicking stop while loading
+        disabled={isLoading && !isStop}
         {...props}
       >
         <style>{`
@@ -61,8 +55,7 @@ export const Button: React.FC<ButtonProps> = React.memo(({
           }
         `}</style>
 
-        {/* Glow Layer - FIXED: Masked to button shape to prevent huge square spill */}
-        <div className={`absolute inset-0 rounded-xl transition-all duration-500 blur-lg ${isStop ? 'opacity-40 group-hover:opacity-60 bg-red-600' : 'opacity-40 group-hover:opacity-70'}`}>
+        <div className={`absolute inset-0 rounded-xl transition-all duration-500 blur-lg ${isStop ? 'opacity-40 group-hover:opacity-60 bg-red-600' : 'opacity-40 group-hover:opacity-70 bg-[#e2b36e]'}`}>
              <div className="w-full h-full rounded-xl overflow-hidden relative">
                  <div className="absolute inset-0 flex items-center justify-center">
                      <div 
@@ -75,9 +68,7 @@ export const Button: React.FC<ButtonProps> = React.memo(({
              </div>
         </div>
         
-        {/* Border Spin Layer - Keeps the sharp button shape */}
         <div className="relative rounded-xl overflow-hidden p-[1.5px] transition-all duration-300">
-            {/* Spinning Border Gradient */}
             <div className="absolute inset-0 flex items-center justify-center">
                  <div 
                    className="w-[300%] aspect-square animate-spin-slow flex-none" 
@@ -87,10 +78,8 @@ export const Button: React.FC<ButtonProps> = React.memo(({
                  />
             </div>
             
-            {/* Inner Content - Background Color */}
             <div className={`relative h-full w-full rounded-[10px] px-6 py-2 flex items-center justify-center gap-2 overflow-hidden font-bold tracking-wider shadow-inner z-10 transition-all duration-500 ${currentInnerGradient} ${!isStop && 'group-hover:brightness-110'} ${textColorClass}`}>
                 
-                {/* SCAN EFFECT - ONLY FOR STOP BUTTON */}
                 {isStop && (
                     <div 
                       className="absolute inset-y-0 w-2/3 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none"
@@ -98,11 +87,10 @@ export const Button: React.FC<ButtonProps> = React.memo(({
                     ></div>
                 )}
                 
-                {/* Content */}
                 <div className="relative z-10 flex items-center gap-2 transition-all duration-300">
                   {isLoading && !isStop ? (
                     <>
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-[#09232b]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -116,7 +104,6 @@ export const Button: React.FC<ButtonProps> = React.memo(({
     );
   }
 
-  // Standard Variants
   return (
     <button 
       className={`${baseStyles} ${variants[variant]} ${className}`}

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Astra | Creative From The Stars</title>
+    <title>Astra - KAT | Creative From The Stars</title>
     <link rel="icon" href="https://drive.google.com/thumbnail?id=15neYV9SX3Stezx_yGzn47dfbxMsn3YsX" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -12,8 +12,8 @@
         font-family: 'Inter', sans-serif;
         margin: 0;
         padding: 0;
-        background-color: #0f172a;
-        color: white;
+        background-color: #103742; /* Deep Teal */
+        color: #e2b36e; /* Gold Text */
         -webkit-user-select: none;
         -moz-user-select: none;
         -ms-user-select: none;
@@ -25,54 +25,66 @@
       @keyframes gradient-x { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
       .animate-spin-slow { animation: spin 3s linear infinite; }
       @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+      #global-loader {
+        position: fixed;
+        inset: 0;
+        background-color: #103742; 
+        z-index: 999999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.5s ease-out;
+      }
+      
+      #global-loader img {
+        width: 150px;
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 0 20px rgba(226,179,110,0.2)); /* Gold glow */
+        animation: pulse-loader 2s infinite ease-in-out;
+      }
+
+      @keyframes pulse-loader {
+        0% { transform: scale(0.95); opacity: 0.8; }
+        50% { transform: scale(1.05); opacity: 1; }
+        100% { transform: scale(0.95); opacity: 0.8; }
+      }
     </style>
     
-    <!-- HIGH SECURITY SCRIPT (SAFE MODE) -->
+    <!-- Security script modified to allow console logging for debugging -->
     <script id="x-security-core">
       (function(){
-        // 1. Freeze Console (Safe Mode - Warnings Only)
-        try {
-            var _c = window.console;
-            // We don't throw error here to avoid breaking AI Studio console logging
-            // But we can still annoy inspectors
-            /* 
-            Object.defineProperty(window, 'console', {
-                get: function() { if (_c._commandLineAPI) return _c; return _c; },
-                set: function(val) { _c = val; }
-            });
-            */
-        } catch(e) {}
-
-        // 2. Anti-Iframe
-        try { if(window.top !== window.self) window.top.location = window.self.location; } catch(e){}
-
-        // 3. Aggressive Event Blocking
         document.addEventListener('contextmenu', event => event.preventDefault());
+        
         document.onkeydown = function(e) {
-            if(e.keyCode == 123) return false; // F12
-            if(e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) return false; // I,J,C
-            if(e.ctrlKey && (e.keyCode == 85 || e.keyCode == 83 || e.keyCode == 80)) return false; // U,S,P
-        }
-
-        // 4. Integrity Check Only (Removed Viewport Check)
-        var _id = 'x-security-core';
-        setInterval(function(){
-            // Integrity: Check if this script tag still exists
-            if(!document.getElementById(_id)) {
-                document.body.innerHTML = '';
-                window.location.reload();
+            if(e.keyCode == 123) {
+                // F12 disabled but allowed for dev if needed manually
+                return false;
             }
-        }, 1000);
+            if(e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) {
+                return false;
+            }
+            if(e.ctrlKey && e.keyCode == 85) {
+                return false;
+            }
+        }
       })();
     </script>
 <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "bcryptjs": "https://esm.sh/bcryptjs@^3.0.3",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
+    "path": "https://esm.sh/path@^0.12.7",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.93.3",
     "firebase/app": "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js",
     "firebase/database": "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js",
     "firebase/": "https://esm.sh/firebase@^12.8.0/"
@@ -82,6 +94,10 @@
 <link rel="stylesheet" href="/index.css">
 </head>
   <body>
+    <div id="global-loader">
+        <img src="https://drive.google.com/thumbnail?id=1LgeMCeo2P5G2ex6Vo9ONZMBVgEA9kGGR&sz=w500" alt="ASTRA EK" />
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
