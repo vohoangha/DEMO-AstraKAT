@@ -91,20 +91,20 @@ async function safeGenerateContent(ai: GoogleGenAI, params: any) {
     try {
         return await ai.models.generateContent(params);
     } catch (error: any) {
-        const msg = error.message || error.toString();
-        // Check for specific Referrer Error
-        if (msg.includes("generativelanguage.googleapis.com") && msg.includes("referrer")) {
+        const msg = (error.message || error.toString()).toLowerCase();
+        
+        // Robust check for Referrer errors:
+        // 1. Must mention the API domain
+        // 2. Must mention "referer" (1 'r') or "referrer" (2 'r's) or "blocked" in the context of permissions
+        const isReferrerError = msg.includes("generativelanguage.googleapis.com") && 
+                                (msg.includes("referer") || msg.includes("referrer"));
+
+        if (isReferrerError) {
             console.warn("⚠️ Direct Gemini API blocked by browser/extension. Switching to Server Proxy...");
             // Use Proxy
             const proxyRes = await apiService.geminiProxy(params);
             
             // Map raw JSON to a structure that looks enough like GenerateContentResponse
-            // The SDK response has getters, but for our usage we mostly access properties
-            // We need to ensure we return something that works with the existing code
-            // Existing code usually accesses: response.candidates[0].content.parts
-            // OR response.text getter.
-            
-            // Add a mock .text getter if needed, but our code accesses parts directly mostly
             if (!proxyRes.candidates) throw new Error("Proxy response invalid: " + JSON.stringify(proxyRes));
             
             // Mock the .text property if used by helper functions
@@ -125,19 +125,18 @@ async function safeGenerateContent(ai: GoogleGenAI, params: any) {
 
 const handleGeminiError = (error: any) => {
     const msg = error.message || error.toString();
+    const lowerMsg = msg.toLowerCase();
     
     // LOGGING FOR ADMIN CONSOLE (Technical Details)
     console.error(`[Gemini API Error]: ${msg}`);
 
     // SPECIFIC CHECK: The "PC 2" Issue
-    // If the error explicitly states that the referrer is the Google API itself, it means the browser
-    // or an extension is stripping the original referrer and replacing it.
-    if (msg.includes("Requests from referer https://generativelanguage.googleapis.com/ are blocked")) {
-        throw new Error("⚠️ Browser Privacy Issue: Your browser is blocking the referrer. Please disable privacy extensions (like 'Referer Control') or use Chrome.");
+    if (lowerMsg.includes("generativelanguage.googleapis.com") && (lowerMsg.includes("referer") || lowerMsg.includes("referrer"))) {
+        throw new Error("⚠️ Browser Privacy Issue: Your browser is blocking the referrer. Please disable privacy extensions (like 'Referer Control') or use Chrome. Proxy fallback failed.");
     }
 
     // USER FACING MESSAGES (Simple)
-    if (msg.includes("API_KEY_HTTP_REFERRER_BLOCKED") || (msg.includes("403") && msg.includes("referer"))) {
+    if (msg.includes("API_KEY_HTTP_REFERRER_BLOCKED") || (msg.includes("403") && lowerMsg.includes("referer"))) {
         throw new Error("⚠️ Security Check Failed: Please check API Key restrictions in Google Cloud Console. Ensure your domain (e.g. localhost) is allowed.");
     }
     
@@ -149,7 +148,7 @@ const handleGeminiError = (error: any) => {
          throw new Error("🐢 AI Server is busy. Retrying usually helps.");
     }
     
-    if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("networkerror")) {
+    if (lowerMsg.includes("failed to fetch") || lowerMsg.includes("networkerror")) {
          throw new Error("📡 Connection failed. Check your internet.");
     }
     
@@ -186,9 +185,14 @@ export async function testGeminiConnection(): Promise<{ latency: number, status:
         return { latency, status: 'ok' };
     } catch (e: any) {
         let helpfulMsg = e.message;
-        if (e.message.includes("403")) helpfulMsg = "403 Forbidden: API Key Restricted.";
+        const lowerMsg = helpfulMsg.toLowerCase();
+        
+        if (lowerMsg.includes("403")) helpfulMsg = "403 Forbidden: API Key Restricted.";
         // Catch the specific PC2 error in diagnostics too
-        if (e.message.includes("generativelanguage.googleapis.com")) helpfulMsg = "Referrer Blocked by Browser Extension";
+        if (lowerMsg.includes("generativelanguage.googleapis.com") && (lowerMsg.includes("referer") || lowerMsg.includes("referrer"))) {
+             helpfulMsg = "Referrer Blocked by Browser Extension (Proxy Failed)";
+        }
+        
         return { latency: 0, status: 'error', message: helpfulMsg };
     }
 }
