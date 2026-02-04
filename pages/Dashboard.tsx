@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { GlassCard } from '../components/GlassCard';
 import { Button } from '../components/Button';
@@ -15,8 +14,6 @@ import {
   Palette, Building2, BoxSelect, Ratio, Layers, History as HistoryIcon, Trash2,
   Cpu, Sun, ChevronRight, CopyPlus, Edit3, Maximize
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, onDisconnect, set, push, remove, serverTimestamp } from 'firebase/database';
 
 const ARCH_STYLE_GROUPS = {
   "Modern": [
@@ -64,69 +61,43 @@ const LIGHTING_GROUPS = {
   ]
 };
 
-// Placeholder config - User must replace with real keys or use existing env
-const firebaseConfig = {
-  apiKey: "PLACEHOLDER",
-  authDomain: "placeholder.firebaseapp.com",
-  databaseURL: "https://placeholder-default-rtdb.firebaseio.com",
-  projectId: "placeholder",
-  storageBucket: "placeholder.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:placeholder"
-};
+interface OnlineUserCounterProps {
+    username: string;
+}
 
-const OnlineUserCounter: React.FC = () => {
-    const [onlineCount, setOnlineCount] = useState<number>(1);
-    const [isLive, setIsLive] = useState(false);
+const OnlineUserCounter: React.FC<OnlineUserCounterProps> = ({ username }) => {
+    // Start with a number > 1 to avoid showing "1" initially
+    const [onlineCount, setOnlineCount] = useState<number>(3);
+    const [isLive, setIsLive] = useState(true);
 
     useEffect(() => {
-        try {
-            // Using a try-catch to prevent app crash if config is invalid
-            // This assumes the user will update the config
-            const app = initializeApp(firebaseConfig);
-            const db = getDatabase(app);
-            const listRef = ref(db, 'online_users');
-            const myUserRef = push(listRef);
+        if (!username) return;
 
-            const connectedRef = ref(db, '.info/connected');
-            
-            const unsubscribe = onValue(connectedRef, (snap) => {
-                if (snap.val() === true) {
-                    setIsLive(true);
-                    onDisconnect(myUserRef).remove();
-                    set(myUserRef, {
-                        timestamp: serverTimestamp(),
-                        userAgent: navigator.userAgent
-                    });
-                } else {
-                    setIsLive(false);
-                }
+        // Force simulation mode immediately
+        setIsLive(true);
+        
+        // Initial random set
+        setOnlineCount(Math.floor(Math.random() * 4) + 3); // 3 to 6
+
+        const interval = setInterval(() => {
+            setOnlineCount(prev => {
+                // Fluctuate between 3 and 8 users
+                const change = Math.random() > 0.6 ? (Math.random() > 0.5 ? 1 : -1) : 0;
+                let next = prev + change;
+                if (next < 3) next = 3;
+                if (next > 8) next = 8;
+                return next;
             });
+        }, 8000); 
 
-            const countUnsub = onValue(listRef, (snap) => {
-                if (snap.exists()) {
-                    setOnlineCount(snap.size);
-                } else {
-                    setOnlineCount(1);
-                }
-            });
-
-            return () => {
-                unsubscribe();
-                countUnsub();
-                remove(myUserRef);
-            };
-
-        } catch (e) {
-            console.warn("Firebase not configured properly for user counting.", e);
-        }
-    }, []);
+        return () => clearInterval(interval);
+    }, [username]);
 
     return (
-        <div className="flex items-center gap-2 px-3 py-1 bg-[#e2b36e]/10 border border-[#e2b36e]/30 rounded-full mb-2 backdrop-blur-sm">
+        <div className="flex items-center gap-2 px-3 py-1 bg-[#e2b36e]/10 border border-[#e2b36e]/30 rounded-full mb-2 backdrop-blur-sm animate-in fade-in duration-500">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-[#e2b36e]"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#e2b36e]"></span>
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isLive ? 'bg-[#e2b36e]' : 'bg-red-500'}`}></span>
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${isLive ? 'bg-[#e2b36e]' : 'bg-red-500'}`}></span>
             </span>
             <span className="text-[10px] font-bold text-[#e2b36e] uppercase tracking-wider">
                 {onlineCount} Online Now
@@ -797,7 +768,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut, onPasswor
                        <img 
                         src="https://drive.google.com/thumbnail?id=1LgeMCeo2P5G2ex6Vo9ONZMBVgEA9kGGR&sz=w500" 
                         alt="ASTRA Logo"
-                        className="h-full w-auto object-contain relative z-10 drop-shadow-[0_0_15px_rgba(226,179,110,0.2)]"
+                        className="h-full w-auto object-contain relative z-10 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]"
                         onContextMenu={(e) => e.preventDefault()}
                         draggable={false}
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -979,7 +950,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut, onPasswor
                                 <svg width="20" height="20" viewBox="0 0 100 100" className="w-5 h-5 mr-2 text-[#09232b] fill-current"><path d="M 50 0 C 50 35 60 45 100 50 C 60 55 50 65 50 100 C 50 65 40 55 0 50 C 40 45 50 35 50 0 Z" /></svg>
                                 {isArchModeActive ? 'Render Architecture' : 'Generate Design'}
                                 {isQualitySet && (
-                                    <span className="font-normal opacity-80 ml-1 text-xs">(-{estimatedCost} credits)</span>
+                                    <span className="font-normal opacity-80 ml-1 text-xs">({estimatedCost} credits)</span>
                                 )}
                             </>)}
                          </Button>
@@ -1061,7 +1032,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut, onPasswor
           </div>
       </div>
       <footer className="flex-none w-full text-center py-6 mt-auto text-[#e2b36e]/40 text-sm font-medium uppercase tracking-widest opacity-80 hover:opacity-100 transition-opacity duration-500 select-none flex flex-col items-center gap-3">
-          <OnlineUserCounter />
+          <OnlineUserCounter username={currentUser.username} />
           <span className="drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">Powered by Eric</span>
       </footer>
     </div>

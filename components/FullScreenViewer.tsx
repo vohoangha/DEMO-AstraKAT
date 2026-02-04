@@ -748,7 +748,7 @@ export const FullScreenViewer: React.FC<FullScreenViewerProps> = ({
                                     <svg width="16" height="16" viewBox="0 0 100 100" className="fill-current text-[#09232b] mr-1"><path d="M 50 0 C 50 35 60 45 100 50 C 60 55 50 65 50 100 C 50 65 40 55 0 50 C 40 45 50 35 50 0 Z" /></svg>
                                     Generate
                                     {/* Format cost to remove trailing zeros */}
-                                    <span className="font-normal opacity-80 ml-1 text-[10px] lowercase">(-{editCost} credits)</span>
+                                    <span className="font-normal opacity-80 ml-1 text-[10px] lowercase">({editCost} credits)</span>
                                 </>)}
                             </Button>
                       </div>

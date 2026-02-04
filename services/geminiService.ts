@@ -86,28 +86,21 @@ const getApiKey = (): string => {
   return "";
 };
 
-// HELPER: Execute Generation with automatic Proxy Fallback
 async function safeGenerateContent(ai: GoogleGenAI, params: any) {
     try {
         return await ai.models.generateContent(params);
     } catch (error: any) {
         const msg = (error.message || error.toString()).toLowerCase();
         
-        // Robust check for Referrer errors:
-        // 1. Must mention the API domain
-        // 2. Must mention "referer" (1 'r') or "referrer" (2 'r's) or "blocked" in the context of permissions
         const isReferrerError = msg.includes("generativelanguage.googleapis.com") && 
                                 (msg.includes("referer") || msg.includes("referrer"));
 
         if (isReferrerError) {
-            console.warn("⚠️ Direct Gemini API blocked by browser/extension. Switching to Server Proxy...");
-            // Use Proxy
+            console.warn("Switching to Server Proxy due to Referrer Policy...");
             const proxyRes = await apiService.geminiProxy(params);
             
-            // Map raw JSON to a structure that looks enough like GenerateContentResponse
             if (!proxyRes.candidates) throw new Error("Proxy response invalid: " + JSON.stringify(proxyRes));
             
-            // Mock the .text property if used by helper functions
             if (!proxyRes.text) {
                 Object.defineProperty(proxyRes, 'text', {
                     get: function() {
@@ -127,17 +120,14 @@ const handleGeminiError = (error: any) => {
     const msg = error.message || error.toString();
     const lowerMsg = msg.toLowerCase();
     
-    // LOGGING FOR ADMIN CONSOLE (Technical Details)
     console.error(`[Gemini API Error]: ${msg}`);
 
-    // SPECIFIC CHECK: The "PC 2" Issue
     if (lowerMsg.includes("generativelanguage.googleapis.com") && (lowerMsg.includes("referer") || lowerMsg.includes("referrer"))) {
-        throw new Error("⚠️ Browser Privacy Issue: Your browser is blocking the referrer. Please disable privacy extensions (like 'Referer Control') or use Chrome. Proxy fallback failed.");
+        throw new Error("⚠️ Browser Privacy Issue: Your browser is blocking the referrer. Please disable privacy extensions or try a different browser.");
     }
 
-    // USER FACING MESSAGES (Simple)
     if (msg.includes("API_KEY_HTTP_REFERRER_BLOCKED") || (msg.includes("403") && lowerMsg.includes("referer"))) {
-        throw new Error("⚠️ Security Check Failed: Please check API Key restrictions in Google Cloud Console. Ensure your domain (e.g. localhost) is allowed.");
+        throw new Error("⚠️ Security Check Failed: API Key restrictions prevent this request.");
     }
     
     if (msg.includes("429") || msg.includes("quota")) {
@@ -152,11 +142,9 @@ const handleGeminiError = (error: any) => {
          throw new Error("📡 Connection failed. Check your internet.");
     }
     
-    // Fallback generic error for users
     throw new Error(`Generation failed: ${msg.substring(0, 50)}...`);
 };
 
-// NEW FUNCTION: Lightweight ping to check API health
 export async function testGeminiConnection(): Promise<{ latency: number, status: 'ok' | 'error', message?: string }> {
     const start = Date.now();
     try {
@@ -174,7 +162,6 @@ export async function testGeminiConnection(): Promise<{ latency: number, status:
             }
         }
 
-        // Use smallest model for fastest ping
         const model = 'gemini-3-flash-preview';
         await safeGenerateContent(ai, { 
             model, 
@@ -188,9 +175,8 @@ export async function testGeminiConnection(): Promise<{ latency: number, status:
         const lowerMsg = helpfulMsg.toLowerCase();
         
         if (lowerMsg.includes("403")) helpfulMsg = "403 Forbidden: API Key Restricted.";
-        // Catch the specific PC2 error in diagnostics too
         if (lowerMsg.includes("generativelanguage.googleapis.com") && (lowerMsg.includes("referer") || lowerMsg.includes("referrer"))) {
-             helpfulMsg = "Referrer Blocked by Browser Extension (Proxy Failed)";
+             helpfulMsg = "Referrer Blocked (Proxy Failed)";
         }
         
         return { latency: 0, status: 'error', message: helpfulMsg };
@@ -227,7 +213,6 @@ export async function generateCreativeAsset(
   }
   
   let model = 'gemini-2.5-flash-image'; 
-  // Upgrade model only for 2K or 4K.
   if (quality === ImageQuality.Q2K || quality === ImageQuality.Q4K) {
       model = 'gemini-3-pro-image-preview';
   }
@@ -317,7 +302,7 @@ export async function generatePromptFromImage(
     if (type !== MediaType.NONE) promptText += ` The target media type is ${type}.`;
     if (archStyle !== ArchitectureStyle.NONE) promptText += ` The architecture style is ${archStyle}.`;
     promptText += " Describe the subject, composition, colors, typography, lighting, materials, and mood in detail.";
-    promptText += " IMPORTANT: Return ONLY the prompt content. Do not include any conversational filler like 'Here is the prompt' or 'Based on your request'. Start directly with the description.";
+    promptText += " IMPORTANT: Return ONLY the prompt content. Do not include any conversational filler.";
     
     parts.push({ text: promptText });
 

@@ -72,8 +72,8 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     <NotificationContext.Provider value={{ showNotification, closeNotification }}>
       {children}
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 backdrop-blur-xl animate-in fade-in duration-300">
-           <GlassCard className={`max-w-sm w-full p-0 flex flex-col items-center text-center relative bg-gradient-to-br ${getColorClass()} overflow-hidden`}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
+           <GlassCard className={`max-w-sm w-full p-0 flex flex-col items-center text-center relative bg-gradient-to-br ${getColorClass()} overflow-hidden ring-1 ring-[#e2b36e]/10`}>
                 
                 {/* Close Button (X) - Hidden for critical warnings */}
                 {type !== 'warning' && (
@@ -86,7 +86,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
                 )}
 
                 <div className="p-8 flex flex-col items-center w-full">
-                    <div className={`mb-4 p-3 rounded-full bg-black/20 border border-[#e2b36e]/10 shadow-inner ${type === 'success' ? 'animate-bounce-short' : ''}`}>
+                    <div className={`mb-4 p-3 rounded-full bg-black/40 border border-[#e2b36e]/20 shadow-inner ${type === 'success' ? 'animate-bounce-short' : ''}`}>
                         {getIcon()}
                     </div>
                     
@@ -94,15 +94,19 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
                         {getTitle()}
                     </h3>
                     
-                    <p className="text-sm text-[#e2b36e]/70 font-medium leading-relaxed mb-2">
+                    <p className="text-sm text-[#e2b36e]/80 font-medium leading-relaxed mb-2">
                         {message}
                     </p>
                 </div>
 
                 {/* Show button if it's not success OR if we have a callback action (like logout) */}
                 {(type !== 'success' || onConfirmCallback) && (
-                    <div className="w-full p-4 pt-0">
-                         <Button onClick={closeNotification} className="w-full py-2.5 font-bold tracking-widest uppercase text-xs shadow-lg bg-white/10 hover:bg-white/20 border-white/10 text-[#e2b36e]">
+                    <div className="w-full p-6 pt-0">
+                         {/* CHANGED: Forced styles with !important to ensure visibility */}
+                         <Button 
+                            onClick={closeNotification} 
+                            className="w-full py-3 font-bold tracking-widest uppercase text-xs shadow-xl !bg-[#e2b36e] !text-[#09232b] hover:!bg-[#b28e67] !border-0"
+                         >
                             {actionLabel ? actionLabel : (type === 'warning' ? 'LOGOUT' : 'Close')}
                          </Button>
                     </div>

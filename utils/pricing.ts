@@ -2,11 +2,11 @@
 import { ImageQuality } from "../types";
 
 export const PRICING = {
-    AUTO: 0.2,
-    STANDARD: 0.3,
-    Q2K: 0.8,
-    Q4K: 1.4,
-    EDIT: 0.8
+    AUTO: 0.5,
+    STANDARD: 1,
+    Q2K: 2,
+    Q4K: 3.5,
+    EDIT: 2
 };
 
 interface CostParams {

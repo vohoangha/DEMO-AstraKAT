@@ -8,15 +8,12 @@ export default async function handler(req, res) {
     const payload = req.body;
     const { action, endpointType, username, superAdminPass } = payload;
 
-    // --- GEMINI PROXY HANDLER (Fix for blocked Referrers) ---
     if (action === 'gemini_proxy') {
         const apiKey = process.env.API_KEY || process.env.VITE_API_KEY;
         if (!apiKey) return res.status(500).json({ error: "Server API Key missing" });
 
         const { model, contents, config } = payload;
         
-        // Map SDK config to REST API generationConfig
-        // The SDK uses 'config', REST API expects 'generationConfig'
         const bodyPayload = {
             contents: contents,
             generationConfig: config
@@ -24,21 +21,12 @@ export default async function handler(req, res) {
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         
-        // Fix for "referer <empty> blocked":
-        // We must explicitly send a Referer header that matches the API Key's allowed domain list.
-        // We prioritize the Origin header from the client request.
         let refererToUse = req.headers.origin;
-        
-        // Fallback to Referer header if Origin is missing
         if (!refererToUse) refererToUse = req.headers.referer;
-        
-        // Fallback to Host header construction if both are missing (e.g., server-to-server or stripped)
         if (!refererToUse && req.headers.host) {
              const proto = req.headers['x-forwarded-proto'] || 'http'; 
              refererToUse = `${proto}://${req.headers.host}`;
         }
-        
-        // Ultimate fallback for local dev if nothing else works
         if (!refererToUse) refererToUse = "http://localhost:3000";
 
         try {
@@ -54,7 +42,6 @@ export default async function handler(req, res) {
             const data = await gRes.json();
             
             if (!gRes.ok) {
-                // Pass through the Gemini error
                 const errMsg = data.error?.message || `Gemini API Error: ${gRes.status}`;
                 return res.status(gRes.status).json({ error: errMsg, details: data });
             }
@@ -64,7 +51,6 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: "Proxy Fetch Failed: " + e.message });
         }
     }
-    // --------------------------------------------------------
 
     const ADMIN_USER = (process.env.ADMIN_USERNAME || process.env.VITE_ADMIN_USERNAME || "").trim();
     const ADMIN_PASS = (process.env.ADMIN_PASSWORD || process.env.VITE_ADMIN_PASSWORD || "").trim();
