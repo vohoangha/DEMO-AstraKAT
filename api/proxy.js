@@ -8,6 +8,44 @@ export default async function handler(req, res) {
     const payload = req.body;
     const { action, endpointType, username, superAdminPass } = payload;
 
+    // --- GEMINI PROXY HANDLER (Fix for blocked Referrers) ---
+    if (action === 'gemini_proxy') {
+        const apiKey = process.env.API_KEY || process.env.VITE_API_KEY;
+        if (!apiKey) return res.status(500).json({ error: "Server API Key missing" });
+
+        const { model, contents, config } = payload;
+        
+        // Map SDK config to REST API generationConfig
+        // The SDK uses 'config', REST API expects 'generationConfig'
+        const bodyPayload = {
+            contents: contents,
+            generationConfig: config
+        };
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        
+        try {
+            const gRes = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bodyPayload)
+            });
+            
+            const data = await gRes.json();
+            
+            if (!gRes.ok) {
+                // Pass through the Gemini error
+                const errMsg = data.error?.message || `Gemini API Error: ${gRes.status}`;
+                return res.status(gRes.status).json({ error: errMsg, details: data });
+            }
+            
+            return res.status(200).json(data);
+        } catch (e) {
+            return res.status(500).json({ error: "Proxy Fetch Failed: " + e.message });
+        }
+    }
+    // --------------------------------------------------------
+
     const ADMIN_USER = (process.env.ADMIN_USERNAME || process.env.VITE_ADMIN_USERNAME || "").trim();
     const ADMIN_PASS = (process.env.ADMIN_PASSWORD || process.env.VITE_ADMIN_PASSWORD || "").trim();
     
