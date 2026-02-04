@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { GlassCard } from '../components/GlassCard';
 import { Button } from '../components/Button';
@@ -8,6 +9,8 @@ import { generateCreativeAsset, generatePromptFromImage, enhanceUserPrompt, edit
 import { apiService } from '../services/apiService';
 import { saveUserToCookie } from '../utils/storage';
 import { calculateGenerationCost } from '../utils/pricing';
+import { db } from '../services/firebaseConfig';
+import { ref, onValue, set, onDisconnect, remove, serverTimestamp } from "firebase/database";
 import { 
   Wand2, Download, Image as ImageIcon, Sparkles, LayoutTemplate, MonitorPlay, Instagram,
   ChevronDown, Smartphone, Disc, CreditCard, RectangleHorizontal, Plus, X, Key,
@@ -62,36 +65,54 @@ const LIGHTING_GROUPS = {
 };
 
 interface OnlineUserCounterProps {
-    username: string;
+    user: User;
 }
 
-const OnlineUserCounter: React.FC<OnlineUserCounterProps> = ({ username }) => {
-    // Start with a number > 1 to avoid showing "1" initially
-    const [onlineCount, setOnlineCount] = useState<number>(3);
-    const [isLive, setIsLive] = useState(true);
+const OnlineUserCounter: React.FC<OnlineUserCounterProps> = ({ user }) => {
+    const [onlineCount, setOnlineCount] = useState<number>(1);
+    const [isLive, setIsLive] = useState(false);
 
     useEffect(() => {
-        if (!username) return;
+        if (!user || !user.username) return;
 
-        // Force simulation mode immediately
-        setIsLive(true);
+        // Clean username for firebase key path (remove special chars)
+        const safeKey = user.username.replace(/[.#$/[\]]/g, '_');
         
-        // Initial random set
-        setOnlineCount(Math.floor(Math.random() * 4) + 3); // 3 to 6
+        // Define references
+        const userStatusRef = ref(db, `online_users/${safeKey}`);
+        const allUsersRef = ref(db, 'online_users');
 
-        const interval = setInterval(() => {
-            setOnlineCount(prev => {
-                // Fluctuate between 3 and 8 users
-                const change = Math.random() > 0.6 ? (Math.random() > 0.5 ? 1 : -1) : 0;
-                let next = prev + change;
-                if (next < 3) next = 3;
-                if (next > 8) next = 8;
-                return next;
-            });
-        }, 8000); 
+        // 1. Set user as online
+        set(userStatusRef, {
+            username: user.username,
+            team: user.team || 'Unknown',
+            avatar: user.avatarUrl || '',
+            last_seen: serverTimestamp(),
+            state: 'online'
+        }).then(() => {
+            // 2. Configure automatic removal on disconnect (tab close/internet loss)
+            onDisconnect(userStatusRef).remove();
+            setIsLive(true);
+        }).catch((err) => {
+            console.error("Firebase connection error:", err);
+            setIsLive(false);
+        });
 
-        return () => clearInterval(interval);
-    }, [username]);
+        // 3. Listen for changes in the online_users list to update count
+        const unsubscribe = onValue(allUsersRef, (snapshot) => {
+            if (snapshot.exists()) {
+                setOnlineCount(snapshot.size); // .size returns number of children
+            } else {
+                setOnlineCount(1);
+            }
+        });
+
+        // Cleanup on component unmount
+        return () => {
+            unsubscribe();
+            remove(userStatusRef); // Explicitly remove if user navigates away within app
+        };
+    }, [user]);
 
     return (
         <div className="flex items-center gap-2 px-3 py-1 bg-[#e2b36e]/10 border border-[#e2b36e]/30 rounded-full mb-2 backdrop-blur-sm animate-in fade-in duration-500">
@@ -1032,7 +1053,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onSignOut, onPasswor
           </div>
       </div>
       <footer className="flex-none w-full text-center py-6 mt-auto text-[#e2b36e]/40 text-sm font-medium uppercase tracking-widest opacity-80 hover:opacity-100 transition-opacity duration-500 select-none flex flex-col items-center gap-3">
-          <OnlineUserCounter username={currentUser.username} />
+          <OnlineUserCounter user={currentUser} />
           <span className="drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">Powered by Eric</span>
       </footer>
     </div>

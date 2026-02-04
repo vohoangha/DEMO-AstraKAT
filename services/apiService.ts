@@ -79,7 +79,7 @@ const proxyFetch = async (body: any) => {
 
 export const apiService = {
 
-  // NEW: Proxy method for Gemini API
+  // Proxy method for Gemini API
   geminiProxy: async (payload: { model: string, contents: any, config?: any }) => {
       try {
           return await proxyFetch({

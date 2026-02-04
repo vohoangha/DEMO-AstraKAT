@@ -8,6 +8,8 @@ export default async function handler(req, res) {
     const payload = req.body;
     const { action, endpointType, username, superAdminPass } = payload;
 
+    // --- FIREBASE LOGIC REMOVED (Moved to Client SDK) ---
+
     if (action === 'gemini_proxy') {
         const apiKey = process.env.API_KEY || process.env.VITE_API_KEY;
         if (!apiKey) return res.status(500).json({ error: "Server API Key missing" });
