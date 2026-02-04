@@ -1,8 +1,12 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Changed referrer policy to 'origin' to strictly send the origin (e.g., http://localhost:3000) 
+         This fixes issues where some browsers/extensions replace the referrer with the destination URL -->
+    <meta name="referrer" content="origin" />
     <title>Astra - KAT | Creative From The Stars</title>
     <link rel="icon" href="https://drive.google.com/thumbnail?id=15neYV9SX3Stezx_yGzn47dfbxMsn3YsX" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -91,7 +95,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="global-loader">
