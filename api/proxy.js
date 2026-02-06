@@ -159,6 +159,7 @@ export default async function handler(req, res) {
             }
 
             const SENSITIVE_ACTIONS = [
+                'admin_verify', // Added for Dashboard Access Check
                 'admin_top_up', 
                 'admin_update_role', 
                 'admin_toggle_status', 

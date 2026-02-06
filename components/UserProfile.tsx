@@ -39,6 +39,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [securityPassword, setSecurityPassword] = useState('');
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [showSecurityPass, setShowSecurityPass] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   // ----------------------------
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -230,19 +231,20 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       setShowSecurityPass(false);
   };
 
-  const handleSecuritySubmit = (e: React.FormEvent) => {
+  const handleSecuritySubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       setSecurityError(null);
       
-      const SUPER_ADMIN_PASS = "Astra777"; 
-
-      if (securityPassword === SUPER_ADMIN_PASS) {
+      setIsVerifying(true);
+      try {
+          await apiService.verifySuperAdmin(securityPassword);
           setIsSecurityCheckOpen(false);
           setShowAdminDashboard(true);
-          // No notification required, instant access
-      } else {
+      } catch (e: any) {
           setSecurityError("Access Denied: Invalid Security Code.");
           setSecurityPassword('');
+      } finally {
+          setIsVerifying(false);
       }
   };
 
@@ -305,7 +307,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             </div>
                         )}
                         
-                        <Button type="submit" className="w-full py-3.5 font-extrabold tracking-[0.2em] text-xs shadow-xl mt-2">
+                        <Button type="submit" isLoading={isVerifying} className="w-full py-3.5 font-extrabold tracking-[0.2em] text-xs shadow-xl mt-2">
                             ACCESS
                         </Button>
                      </form>

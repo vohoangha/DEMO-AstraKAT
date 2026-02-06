@@ -236,6 +236,20 @@ export const apiService = {
     };
   },
 
+  verifySuperAdmin: async (password: string): Promise<boolean> => {
+      if (IS_DEV_MODE) {
+          // In Dev, use simple check for convenience
+          return password === "Astra777";
+      }
+      try {
+          // Send to proxy to verify against server environment variables
+          await proxyFetch({ action: 'admin_verify', superAdminPass: password, username: 'admin' });
+          return true;
+      } catch (e) {
+          throw new Error("Invalid Security Code");
+      }
+  },
+
   changePassword: async (username: string, oldPassword: string, newPassword: string): Promise<string> => {
     const lowerUser = username.toLowerCase();
     
