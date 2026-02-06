@@ -13,6 +13,9 @@ import { apiService } from '../services/apiService';
 import { testGeminiConnection } from '../services/geminiService';
 import { GlassCard } from './GlassCard';
 import { useNotification } from '../context/NotificationContext';
+// FIREBASE IMPORTS
+import { db } from '../services/firebaseConfig';
+import { ref, onValue } from 'firebase/database';
 
 // --- GLOBAL LOGGING SYSTEM ---
 interface ConsoleLog {
@@ -130,6 +133,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [processingUser, setProcessingUser] = useState<string | null>(null);
   const teamDropdownRef = useRef<HTMLDivElement>(null);
 
+  // --- ONLINE USERS STATE (FIREBASE) ---
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
   // --- CONSOLE STATE ---
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
   const [geminiHealth, setGeminiHealth] = useState<ServiceHealth>({ status: 'unknown', latency: 0 });
@@ -163,6 +169,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
           fetchTransactions();
       }
   }, [activeTab]);
+
+  // --- FIREBASE ONLINE LISTENER ---
+  useEffect(() => {
+      const onlineUsersRef = ref(db, 'online_users');
+      const unsubscribe = onValue(onlineUsersRef, (snapshot) => {
+          if (snapshot.exists()) {
+              const data = snapshot.val();
+              const onlineSet = new Set<string>();
+              Object.values(data).forEach((u: any) => {
+                  if (u.username) onlineSet.add(u.username);
+              });
+              setOnlineUsers(onlineSet);
+          } else {
+              setOnlineUsers(new Set());
+          }
+      });
+
+      return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -424,9 +449,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
       }
   };
 
+  // Sets the revocation amount to the Max credits of selected users to ensure 0 balance
+  const handleSetMaxRevoke = () => {
+      if (selectedUsers.length === 0) {
+          showNotification("Select users first", "info");
+          return;
+      }
+      
+      const targetUsers = users.filter(u => selectedUsers.includes(u.username));
+      if (targetUsers.length === 0) return;
+
+      const maxCredits = Math.max(...targetUsers.map(u => u.credits));
+      // Add a small buffer or just use max. Since backend logic does Math.max(0, current - amount), 
+      // setting amount = current balance clears it. 
+      // If we have multiple users, setting amount = max(all users) guarantees everyone goes to 0 
+      // (assuming backend handles negative result by clamping to 0, which it does).
+      setAmount(maxCredits > 0 ? maxCredits : 0);
+  };
+
   const handleTransaction = () => {
     if (selectedUsers.length === 0) return;
-    if (amount <= 0) {
+    if (amount <= 0 && transType === 'add') { // Allow 0 for revoke if just clearing empty accounts, but generally revoke needs > 0
         showNotification("Amount must be greater than 0", "warning");
         return;
     }
@@ -845,7 +888,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                              <div className="flex flex-wrap items-center gap-4 justify-center max-w-6xl mx-auto relative">
                                  <div className="flex items-center gap-3 bg-black/40 border border-white/10 rounded-xl px-5 py-3 shadow-inner h-14 shrink-0">
                                      <label className="text-[10px] text-[#e2b36e]/70 uppercase tracking-widest font-bold border-r border-white/10 pr-3 mr-1">Amount</label>
-                                     <div className="relative"><input type="number" value={amount} onChange={(e) => setAmount(Math.max(0, parseInt(e.target.value)))} className="bg-transparent text-[#e2b36e] font-mono text-xl w-24 focus:outline-none text-right placeholder-[#e2b36e]/20" placeholder="0" /><span className="text-[10px] text-[#e2b36e]/30 font-bold tracking-wider ml-2">Credits</span></div>
+                                     <div className="relative">
+                                        <input 
+                                            type="number" 
+                                            value={amount} 
+                                            onChange={(e) => setAmount(Math.max(0, parseInt(e.target.value)))} 
+                                            className="bg-transparent text-[#e2b36e] font-mono text-xl w-24 focus:outline-none text-right placeholder-[#e2b36e]/20 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]" 
+                                            placeholder="0" 
+                                        />
+                                        <span className="text-[10px] text-[#e2b36e]/30 font-bold tracking-wider ml-2">Credits</span>
+                                    </div>
                                  </div>
                                  <div className="flex items-center gap-4 flex-wrap justify-center">
                                      {transType === 'add' ? (
@@ -860,7 +912,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                                             {topUpType === 'Others' && (<input type="text" value={customReason} onChange={(e) => setCustomReason(e.target.value)} placeholder="Enter reason..." className="h-14 bg-black/40 border border-white/20 rounded-xl px-4 text-[#e2b36e] text-sm focus:border-[#e2b36e] focus:bg-black/60 focus:outline-none transition-all placeholder-[#e2b36e]/20 w-48" />)}
                                          </>
                                      ) : (
-                                        <div className="flex items-center gap-3 w-full sm:w-auto min-w-[300px]"><div className="h-14 px-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-center shrink-0"><label className="text-[10px] text-red-400 uppercase tracking-widest font-bold whitespace-nowrap">Reason</label></div><input type="text" value={deductNote} onChange={(e) => setDeductNote(e.target.value)} placeholder="Revocation reason..." className="h-14 w-full bg-black/40 border border-red-500/30 rounded-xl px-4 text-white text-sm focus:border-red-500 focus:bg-black/60 focus:outline-none transition-all placeholder-white/20" /></div>
+                                        <>
+                                            <div className="flex gap-1.5 bg-black/20 p-1.5 rounded-lg border border-white/5 h-14 items-center shrink-0">
+                                                <button 
+                                                    onClick={handleSetMaxRevoke} 
+                                                    className="h-full px-4 rounded-md text-xs font-mono font-bold transition-all text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/30 flex items-center gap-2"
+                                                >
+                                                    <Trash2 size={12} /> ALL
+                                                </button>
+                                            </div>
+                                            <div className="flex items-center gap-3 w-full sm:w-auto min-w-[300px]">
+                                                <div className="h-14 px-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-center shrink-0">
+                                                    <label className="text-[10px] text-red-400 uppercase tracking-widest font-bold whitespace-nowrap">Reason</label>
+                                                </div>
+                                                <input type="text" value={deductNote} onChange={(e) => setDeductNote(e.target.value)} placeholder="Revocation reason..." className="h-14 w-full bg-black/40 border border-red-500/30 rounded-xl px-4 text-white text-sm focus:border-red-500 focus:bg-black/60 focus:outline-none transition-all placeholder-white/20" />
+                                            </div>
+                                        </>
                                      )}
                                  </div>
                                  <Button onClick={handleTransaction} disabled={selectedUsers.length === 0 || isProcessing} isLoading={isProcessing} className={`h-14 px-10 rounded-xl text-sm font-bold uppercase tracking-widest border-0 shadow-xl hover:scale-105 active:scale-95 transition-transform shrink-0 ${transType === 'add' ? 'bg-gradient-to-r from-[#e2b36e] to-[#b28e67] text-[#09232b]' : 'bg-gradient-to-r from-red-600 to-pink-600'}`}>Execute</Button>
@@ -885,7 +952,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                             {isLoading ? Array.from({length:6}).map((_,i) => (<div key={i} className="h-40 bg-white/5 rounded-2xl animate-pulse"></div>)) : processedUsers.length === 0 ? (<div className="col-span-full flex flex-col items-center justify-center py-20 opacity-50"><UsersIcon size={48} className="mb-4 text-[#e2b36e]/30" /><p className="text-[#e2b36e]/60 font-medium">No members found matching your criteria.</p></div>) : processedUsers.map(u => (
                                 <GlassCard key={u.id} className="p-5 flex flex-col gap-4 group hover:bg-white/5 transition-colors relative overflow-hidden">
                                     <div className="flex items-start justify-between">
-                                        <div className="flex items-center gap-3"><div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#e2b36e] to-[#b28e67] flex items-center justify-center text-lg font-bold shadow-lg text-[#09232b]">{u.username.charAt(0).toUpperCase()}</div><div><div className="font-bold text-lg leading-tight text-[#e2b36e]">{u.username}</div><div className="text-[10px] text-[#e2b36e]/60 mb-0.5">{u.team || 'No Team'}</div><div className="text-xs text-[#e2b36e]/40 font-mono">ID: #{u.id}</div></div></div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#e2b36e] to-[#b28e67] flex items-center justify-center text-lg font-bold shadow-lg text-[#09232b]">{u.username.charAt(0).toUpperCase()}</div>
+                                                {/* ONLINE INDICATOR */}
+                                                {onlineUsers.has(u.username) && (
+                                                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                      <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 border-2 border-[#09232b]"></span>
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div><div className="font-bold text-lg leading-tight text-[#e2b36e]">{u.username}</div><div className="text-[10px] text-[#e2b36e]/60 mb-0.5">{u.team || 'No Team'}</div><div className="text-xs text-[#e2b36e]/40 font-mono">ID: #{u.id}</div></div>
+                                        </div>
                                         <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${u.status === 'banned' ? 'bg-red-500/20 text-red-400' : 'bg-[#e2b36e]/20 text-[#e2b36e]'}`}>{u.status === 'active' ? 'ACTIVE' : u.status}</div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 text-sm mt-2 bg-black/20 p-3 rounded-lg border border-white/5"><div className="flex flex-col"><span className="text-[10px] text-[#e2b36e]/40 uppercase">Role</span><span className="font-bold text-[#e2b36e]">{u.role}</span></div><div className="flex flex-col items-end"><span className="text-[10px] text-[#e2b36e]/40 uppercase">Balance</span><span className="font-bold text-[#e2b36e]">{u.credits}</span></div></div>
@@ -967,7 +1046,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                                 <form onSubmit={handleCreateUser} className="space-y-5">
                                     <div className="space-y-1"><label className="text-[10px] font-bold text-[#e2b36e]/40 uppercase tracking-widest pl-1">Codename (Username)</label><div className="relative group"><User className="absolute left-4 top-1/2 -translate-y-1/2 text-[#e2b36e]/30 group-focus-within:text-[#e2b36e] transition-colors" size={16} /><input type="text" value={newUser.username} onChange={(e) => setNewUser({...newUser, username: e.target.value})} placeholder="e.g. agent_sky" className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-[#e2b36e] placeholder-[#e2b36e]/20 focus:outline-none focus:border-[#e2b36e]/50 focus:bg-black/40 transition-all font-mono lowercase" /></div></div>
                                     <div className="space-y-1"><label className="text-[10px] font-bold text-[#e2b36e]/40 uppercase tracking-widest pl-1">Access Key (Password)</label><div className="relative group"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#e2b36e]/30 group-focus-within:text-[#e2b36e] transition-colors" size={16} /><input type="text" value={newUser.password} onChange={(e) => setNewUser({...newUser, password: e.target.value})} placeholder="Default: Astra123@" className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-[#e2b36e] placeholder-[#e2b36e]/20 focus:outline-none focus:border-[#e2b36e]/50 focus:bg-black/40 transition-all font-mono" /></div></div>
-                                    <div className="space-y-1"><label className="text-[10px] font-bold text-[#e2b36e]/40 uppercase tracking-widest pl-1">Starting Balance (Credits)</label><div className="relative group"><Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-[#e2b36e]/30 group-focus-within:text-[#e2b36e] transition-colors" size={16} /><input type="number" value={newUser.credits} onChange={(e) => setNewUser({...newUser, credits: e.target.value})} placeholder="Credits" className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-[#e2b36e] placeholder-[#e2b36e]/20 focus:outline-none focus:border-[#e2b36e]/50 focus:bg-black/40 transition-all font-mono" /></div></div>
+                                    <div className="space-y-1"><label className="text-[10px] font-bold text-[#e2b36e]/40 uppercase tracking-widest pl-1">Starting Balance (Credits)</label><div className="relative group"><Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-[#e2b36e]/30 group-focus-within:text-[#e2b36e] transition-colors" size={16} />
+                                    <input 
+                                        type="number" 
+                                        value={newUser.credits} 
+                                        onChange={(e) => setNewUser({...newUser, credits: e.target.value})} 
+                                        placeholder="Credits" 
+                                        className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-[#e2b36e] placeholder-[#e2b36e]/20 focus:outline-none focus:border-[#e2b36e]/50 focus:bg-black/40 transition-all font-mono appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]" 
+                                    /></div></div>
                                     <div className="grid grid-cols-2 gap-5">
                                         <div className="space-y-1"><label className="text-[10px] font-bold text-[#e2b36e]/40 uppercase tracking-widest pl-1">Clearance Level</label><div className="relative"><select value={newUser.role} onChange={(e) => setNewUser({...newUser, role: e.target.value})} className={`w-full bg-black/20 border border-white/10 rounded-xl py-3.5 px-4 appearance-none focus:outline-none focus:border-[#e2b36e]/50 cursor-pointer ${newUser.role ? 'text-[#e2b36e]' : 'text-[#e2b36e]/40'}`}><option value="" disabled className="bg-[#09232b] text-[#e2b36e]/50">Select Role</option><option value="user" className="bg-[#09232b] text-[#e2b36e]">User</option><option value="admin" className="bg-[#09232b] text-[#e2b36e]">Administrator</option></select><ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-[#e2b36e]/30 pointer-events-none" size={16} /></div></div>
                                         <div className="space-y-1"><label className="text-[10px] font-bold text-[#e2b36e]/40 uppercase tracking-widest pl-1">Team</label><div className="relative" ref={teamDropdownRef}><button type="button" onClick={() => setIsTeamDropdownOpen(!isTeamDropdownOpen)} className={`w-full bg-black/20 border border-white/10 rounded-xl py-3.5 px-4 text-left focus:outline-none focus:border-[#e2b36e]/50 flex items-center justify-between ${newUser.team ? 'text-[#e2b36e]' : 'text-[#e2b36e]/40'}`}><span>{newUser.team || 'Select Team'}</span><ChevronDown className={`text-[#e2b36e]/30 transition-transform ${isTeamDropdownOpen ? 'rotate-180' : ''}`} size={16} /></button>{isTeamDropdownOpen && (<div className="absolute bottom-full left-0 mb-1 w-full bg-[#09232b] border border-[#e2b36e]/20 rounded-xl shadow-xl overflow-hidden z-50">{TEAMS.map(team => (<button type="button" key={team} onClick={() => { setNewUser({...newUser, team: team}); setIsTeamDropdownOpen(false); }} className={`w-full text-left px-4 py-3 text-sm font-medium hover:bg-white/10 transition-colors ${newUser.team === team ? 'text-[#e2b36e] bg-white/5' : 'text-[#e2b36e]/80'}`}>{team}</button>))}</div>)}</div></div>
@@ -983,7 +1069,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                                         <div key={idx} className="grid grid-cols-12 gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
                                             <div className="col-span-3"><input type="text" placeholder="Username" value={u.username} onChange={(e) => updateBulkUser(idx, 'username', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#e2b36e] focus:outline-none focus:bg-white/10" /></div>
                                             <div className="col-span-3"><input type="text" placeholder="Pass (Auto)" value={u.password} onChange={(e) => updateBulkUser(idx, 'password', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#e2b36e] focus:outline-none focus:bg-white/10" /></div>
-                                            <div className="col-span-2"><input type="number" placeholder="Credits" value={u.credits} onChange={(e) => updateBulkUser(idx, 'credits', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#e2b36e] focus:outline-none focus:bg-white/10" /></div>
+                                            <div className="col-span-2"><input type="number" placeholder="Credits" value={u.credits} onChange={(e) => updateBulkUser(idx, 'credits', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#e2b36e] focus:outline-none focus:bg-white/10 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]" /></div>
                                             <div className="col-span-3 flex gap-2"><select value={u.team} onChange={(e) => updateBulkUser(idx, 'team', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-[#e2b36e] focus:outline-none"><option value="" disabled className="bg-[#09232b]">Team</option>{TEAMS.map(t => <option key={t} value={t} className="bg-[#09232b]">{t}</option>)}</select><button onClick={() => removeBulkRow(idx)} disabled={bulkUsers.length === 1} className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-colors disabled:opacity-30"><Trash2 size={12} /></button></div>
                                         </div>
                                     ))}

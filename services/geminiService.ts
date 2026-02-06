@@ -79,40 +79,155 @@ const resizeBase64Image = (base64Str: string, maxDimension: number): Promise<str
     });
 };
 
-const getApiKey = (): string => {
-  if (typeof process !== 'undefined' && process.env.API_KEY) return process.env.API_KEY;
-  const viteKey = (import.meta as any).env?.VITE_API_KEY;
-  if (viteKey && typeof viteKey === 'string') return viteKey;
-  return "";
+// --- PRIORITY API KEY ROTATION LOGIC (ROBUST SCANNER) ---
+let keyPool: string[] = [];
+let isPoolInitialized = false;
+
+// SMART SKIP: Memory of failed keys to avoid retrying them immediately
+const failedKeys = new Set<string>();
+let lastFailureReset = Date.now();
+const RESET_INTERVAL_MS = 60000; // 60 Seconds (Gemini quota resets every minute)
+
+const initKeyPool = () => {
+    if (isPoolInitialized) return;
+    
+    // 1. Get Environment Object
+    const env = (import.meta as any).env || {};
+    const tempPool: string[] = [];
+    
+    // 2. Add Base Keys (Priority #1)
+    if (env.VITE_API_KEY) tempPool.push(env.VITE_API_KEY);
+    if (typeof process !== 'undefined' && process.env.API_KEY) tempPool.push(process.env.API_KEY);
+
+    // 3. Scan for Rotated Keys (1 to 100) - Support Gaps (e.g., 1, 3, 50)
+    for (let i = 1; i <= 100; i++) {
+        const keyName = `VITE_API_KEY_${i}`;
+        const val = env[keyName];
+        
+        // Strict validation: Must be string, longer than 20 chars (Gemini keys are ~39 chars)
+        if (val && typeof val === 'string' && val.trim().length > 20) {
+            tempPool.push(val.trim());
+        }
+    }
+
+    // 4. Deduplicate & Clean (Preserve Order)
+    keyPool = Array.from(new Set(tempPool)); // Set removes duplicates automatically
+    isPoolInitialized = true;
+
+    if (keyPool.length > 0) {
+        console.log(`[ASTRA System] Loaded ${keyPool.length} unique API Keys (Scanned 1-100).`);
+    } else {
+        console.warn("[ASTRA System] No 'VITE_' API Keys found. Will fallback to Server Proxy.");
+    }
 };
 
-async function safeGenerateContent(ai: GoogleGenAI, params: any) {
-    try {
-        return await ai.models.generateContent(params);
-    } catch (error: any) {
-        const msg = (error.message || error.toString()).toLowerCase();
-        
-        const isReferrerError = msg.includes("generativelanguage.googleapis.com") && 
-                                (msg.includes("referer") || msg.includes("referrer"));
+async function safeGenerateContent(params: any) {
+    initKeyPool();
 
-        if (isReferrerError) {
-            console.warn("Switching to Server Proxy due to Referrer Policy...");
+    // Reset failed keys list if enough time has passed
+    if (Date.now() - lastFailureReset > RESET_INTERVAL_MS) {
+        if (failedKeys.size > 0) {
+            console.log(`[ASTRA Rotation] Resetting ${failedKeys.size} blacklisted keys (Quota Refresh).`);
+            failedKeys.clear();
+        }
+        lastFailureReset = Date.now();
+    }
+
+    // FALLBACK STRATEGY: 
+    // If no Client keys (VITE_...) are found, immediately attempt Server Proxy.
+    // This supports Vercel Environments where users only define 'API_KEY_X' (Secure/Server-side).
+    if (keyPool.length === 0) {
+        const win = window as any;
+        // 1. Try AI Studio (Dev/Iframe)
+        if (win.aistudio && await win.aistudio.hasSelectedApiKey()) {
+             const ai = new GoogleGenAI({ apiKey: "AISTUDIO_PROXY" });
+             return await ai.models.generateContent(params);
+        }
+        
+        // 2. Try Server Proxy (Vercel)
+        console.log("[ASTRA] No Client Keys. Switching to Server Proxy...");
+        try {
             const proxyRes = await apiService.geminiProxy(params);
             
-            if (!proxyRes.candidates) throw new Error("Proxy response invalid: " + JSON.stringify(proxyRes));
-            
+            // Normalize Proxy Response to match GoogleGenAI SDK format
             if (!proxyRes.text) {
                 Object.defineProperty(proxyRes, 'text', {
                     get: function() {
-                        try {
-                            return this.candidates?.[0]?.content?.parts?.[0]?.text;
-                        } catch { return undefined; }
+                        try { return this.candidates?.[0]?.content?.parts?.[0]?.text; } catch { return undefined; }
                     }
                 });
             }
             return proxyRes;
+        } catch (e: any) {
+            throw new Error("No API Keys found on Client or Server. Please configure Vercel Environment Variables.");
         }
-        throw error;
+    }
+
+    let lastError: any = null;
+    let attemptedCount = 0;
+
+    // SEQUENTIAL LOOP with SMART SKIP (Client Side)
+    for (let i = 0; i < keyPool.length; i++) {
+        const apiKey = keyPool[i];
+
+        // SMART SKIP: If key failed recently, skip it instantly (0 latency)
+        if (failedKeys.has(apiKey)) {
+            continue;
+        }
+        
+        try {
+            attemptedCount++;
+            const ai = new GoogleGenAI({ apiKey });
+            return await ai.models.generateContent(params);
+        } catch (error: any) {
+            lastError = error;
+            const msg = (error.message || error.toString()).toLowerCase();
+            
+            // Critical Browser Privacy Issue -> Try Server Proxy immediately
+            if (msg.includes("generativelanguage.googleapis.com") && (msg.includes("referer") || msg.includes("referrer"))) {
+                console.warn("Switching to Server Proxy due to Referrer Policy...");
+                const proxyRes = await apiService.geminiProxy(params);
+                
+                if (!proxyRes.candidates && !proxyRes.text) throw new Error("Proxy response invalid: " + JSON.stringify(proxyRes));
+                
+                if (!proxyRes.text) {
+                    Object.defineProperty(proxyRes, 'text', {
+                        get: function() {
+                            try { return this.candidates?.[0]?.content?.parts?.[0]?.text; } catch { return undefined; }
+                        }
+                    });
+                }
+                return proxyRes;
+            }
+
+            // Retryable Errors (Quota, Overloaded)
+            if (msg.includes("429") || msg.includes("quota") || msg.includes("503") || msg.includes("overloaded")) {
+                console.warn(`[ASTRA Rotation] Key #${i + 1} failed (${msg}). Marking as dead for 60s.`);
+                
+                // ADD TO BLACKLIST
+                failedKeys.add(apiKey);
+                
+                continue; // Try next key immediately
+            }
+
+            // Non-retryable error (e.g., Invalid Argument, 400) -> Throw immediately
+            throw error;
+        }
+    }
+    
+    // If all Client keys fail, TRY SERVER PROXY as a last resort
+    // (Maybe the server has extra keys that the client doesn't know about)
+    console.warn("[ASTRA] All Client keys exhausted. Attempting Server Proxy as last resort...");
+    try {
+        const proxyRes = await apiService.geminiProxy(params);
+        if (!proxyRes.text) {
+             Object.defineProperty(proxyRes, 'text', {
+                get: function() { try { return this.candidates?.[0]?.content?.parts?.[0]?.text; } catch { return undefined; } }
+             });
+        }
+        return proxyRes;
+    } catch (e) {
+        throw lastError || new Error(`All ${keyPool.length} client keys exhausted and Server Proxy failed.`);
     }
 }
 
@@ -131,7 +246,7 @@ const handleGeminiError = (error: any) => {
     }
     
     if (msg.includes("429") || msg.includes("quota")) {
-        throw new Error("⚠️ Too many requests. Please wait a moment.");
+        throw new Error("⚠️ System Busy: All API keys are currently exhausted. Please try again in a minute.");
     }
     
     if (msg.includes("503") || msg.includes("overloaded")) {
@@ -148,22 +263,8 @@ const handleGeminiError = (error: any) => {
 export async function testGeminiConnection(): Promise<{ latency: number, status: 'ok' | 'error', message?: string }> {
     const start = Date.now();
     try {
-        const apiKey = getApiKey();
-        let ai: GoogleGenAI;
-        
-        if (apiKey) {
-            ai = new GoogleGenAI({ apiKey });
-        } else {
-            const win = window as any;
-            if (win.aistudio && await win.aistudio.hasSelectedApiKey()) {
-                ai = new GoogleGenAI({ apiKey: "AISTUDIO_PROXY" }); 
-            } else {
-                throw new Error("No API Key found");
-            }
-        }
-
         const model = 'gemini-3-flash-preview';
-        await safeGenerateContent(ai, { 
+        await safeGenerateContent({ 
             model, 
             contents: { parts: [{ text: "ping" }] }
         });
@@ -197,20 +298,6 @@ export async function generateCreativeAsset(
   signal?: AbortSignal,
   onImageReady?: (url: string, index: number) => void
 ): Promise<string[]> {
-  
-  const apiKey = getApiKey();
-  let ai: GoogleGenAI;
-  
-  if (apiKey) {
-      ai = new GoogleGenAI({ apiKey });
-  } else {
-      const win = window as any;
-      if (win.aistudio && await win.aistudio.hasSelectedApiKey()) {
-           ai = new GoogleGenAI({ apiKey: "AISTUDIO_PROXY" }); 
-      } else {
-          throw new Error("API Key missing. Please Connect Gemini or check configuration.");
-      }
-  }
   
   let model = 'gemini-2.5-flash-image'; 
   if (quality === ImageQuality.Q2K || quality === ImageQuality.Q4K) {
@@ -250,7 +337,7 @@ export async function generateCreativeAsset(
   for (let i = 0; i < count; i++) {
       if (signal?.aborted) break;
       try {
-          const response = await safeGenerateContent(ai, { model, contents: { parts }, config });
+          const response = await safeGenerateContent({ model, contents: { parts }, config });
           let foundImage = false;
           if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
               for (const part of response.candidates[0].content.parts) {
@@ -282,15 +369,6 @@ export async function generatePromptFromImage(
     renderEngine: RenderEngine = RenderEngine.DEFAULT,
     lighting: LightingSetting = LightingSetting.DEFAULT
 ): Promise<string> {
-    const apiKey = getApiKey();
-    let ai: GoogleGenAI;
-    if (apiKey) ai = new GoogleGenAI({ apiKey });
-    else {
-         const win = window as any;
-         if (win.aistudio && await win.aistudio.hasSelectedApiKey()) ai = new GoogleGenAI({ apiKey: "AISTUDIO_PROXY" });
-         else throw new Error("API Key missing.");
-    }
-
     const model = 'gemini-3-flash-preview';
     const parts: any[] = [];
     for (const img of images) {
@@ -307,7 +385,7 @@ export async function generatePromptFromImage(
     parts.push({ text: promptText });
 
     try {
-        const response = await safeGenerateContent(ai, { model, contents: { parts } });
+        const response = await safeGenerateContent({ model, contents: { parts } });
         let text = response.text || "";
         text = text.replace(/^Here is a .*? prompt:?\s*/i, "");
         text = text.replace(/^Based on .*?:\s*/i, "");
@@ -326,15 +404,6 @@ export async function enhanceUserPrompt(
     renderEngine: RenderEngine = RenderEngine.DEFAULT,
     lighting: LightingSetting = LightingSetting.DEFAULT
 ): Promise<string> {
-    const apiKey = getApiKey();
-    let ai: GoogleGenAI;
-    if (apiKey) ai = new GoogleGenAI({ apiKey });
-    else {
-         const win = window as any;
-         if (win.aistudio && await win.aistudio.hasSelectedApiKey()) ai = new GoogleGenAI({ apiKey: "AISTUDIO_PROXY" });
-         else throw new Error("API Key missing.");
-    }
-
     const model = 'gemini-3-flash-preview';
     let context = `Task: Enhance this prompt for an AI image generator to create a stunning visual.`;
     context += `\nOriginal Prompt: "${originalPrompt}"`;
@@ -342,7 +411,7 @@ export async function enhanceUserPrompt(
     context += `\nGoal: Make it descriptive, artistic, and detailed. Focus on lighting, composition, texture, and mood. Keep it under 200 words. Return ONLY the enhanced prompt text.`;
 
     try {
-        const response = await safeGenerateContent(ai, { model, contents: context });
+        const response = await safeGenerateContent({ model, contents: context });
         return response.text || originalPrompt;
     } catch (e) {
         handleGeminiError(e);
@@ -358,15 +427,6 @@ export async function editCreativeAsset(
     signal?: AbortSignal,
     referenceImages: string[] = []
 ): Promise<string> {
-    const apiKey = getApiKey();
-    let ai: GoogleGenAI;
-    if (apiKey) ai = new GoogleGenAI({ apiKey });
-    else {
-         const win = window as any;
-         if (win.aistudio && await win.aistudio.hasSelectedApiKey()) ai = new GoogleGenAI({ apiKey: "AISTUDIO_PROXY" });
-         else throw new Error("API Key missing.");
-    }
-    
     const model = 'gemini-3-pro-image-preview';
     const MAX_EDIT_RESOLUTION = 2048; 
 
@@ -400,7 +460,7 @@ export async function editCreativeAsset(
     };
 
     try {
-        const response = await safeGenerateContent(ai, { model, contents: { parts }, config });
+        const response = await safeGenerateContent({ model, contents: { parts }, config });
 
         if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
             for (const part of response.candidates[0].content.parts) {

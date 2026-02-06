@@ -1,4 +1,9 @@
 
+// Memory cache for bad keys (Global variable survives warm restarts in Vercel/Node)
+const failedKeys = new Set();
+let lastFailureReset = Date.now();
+const RESET_INTERVAL_MS = 60000; // 60s
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -8,11 +13,37 @@ export default async function handler(req, res) {
     const payload = req.body;
     const { action, endpointType, username, superAdminPass } = payload;
 
-    // --- FIREBASE LOGIC REMOVED (Moved to Client SDK) ---
-
     if (action === 'gemini_proxy') {
-        const apiKey = process.env.API_KEY || process.env.VITE_API_KEY;
-        if (!apiKey) return res.status(500).json({ error: "Server API Key missing" });
+        // --- API KEY ROTATION LOGIC (ROBUST SERVER SIDE) ---
+        
+        // Periodic Reset of Blacklist
+        if (Date.now() - lastFailureReset > RESET_INTERVAL_MS) {
+             if (failedKeys.size > 0) failedKeys.clear();
+             lastFailureReset = Date.now();
+        }
+
+        const tempKeyPool = [];
+        
+        // 1. Base Keys (Support both VITE_ and non-VITE standard)
+        if (process.env.API_KEY) tempKeyPool.push(process.env.API_KEY);
+        if (process.env.VITE_API_KEY) tempKeyPool.push(process.env.VITE_API_KEY);
+
+        // 2. Rotated Keys - Scan 1 to 100 regardless of gaps
+        // IMPORTANT: We explicitly look for VITE_ keys because user defined them in Vercel
+        for(let i = 1; i <= 100; i++) {
+             // Check VITE_API_KEY_X (Client visible style)
+             const k1 = process.env[`VITE_API_KEY_${i}`];
+             if(k1 && k1.trim().length > 20) tempKeyPool.push(k1.trim());
+             
+             // Check API_KEY_X (Server secret style)
+             const k2 = process.env[`API_KEY_${i}`];
+             if(k2 && k2.trim().length > 20) tempKeyPool.push(k2.trim());
+        }
+
+        // Deduplicate (Remove identical keys if defined in both places)
+        const keyPool = Array.from(new Set(tempKeyPool));
+
+        if (keyPool.length === 0) return res.status(500).json({ error: "Server API Keys missing. Please check Vercel Env Vars." });
 
         const { model, contents, config } = payload;
         
@@ -21,8 +52,6 @@ export default async function handler(req, res) {
             generationConfig: config
         };
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        
         let refererToUse = req.headers.origin;
         if (!refererToUse) refererToUse = req.headers.referer;
         if (!refererToUse && req.headers.host) {
@@ -31,27 +60,54 @@ export default async function handler(req, res) {
         }
         if (!refererToUse) refererToUse = "http://localhost:3000";
 
-        try {
-            const gRes = await fetch(url, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Referer': refererToUse 
-                },
-                body: JSON.stringify(bodyPayload)
-            });
+        // SEQUENTIAL EXECUTION LOOP
+        let lastError = null;
+
+        for (const apiKey of keyPool) {
+            // SMART SKIP: If key is in blacklist, skip immediately
+            if (failedKeys.has(apiKey)) continue;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
             
-            const data = await gRes.json();
-            
-            if (!gRes.ok) {
-                const errMsg = data.error?.message || `Gemini API Error: ${gRes.status}`;
-                return res.status(gRes.status).json({ error: errMsg, details: data });
+            try {
+                const gRes = await fetch(url, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Referer': refererToUse 
+                    },
+                    body: JSON.stringify(bodyPayload)
+                });
+                
+                const data = await gRes.json();
+                
+                if (gRes.ok) {
+                    // Success! 
+                    return res.status(200).json(data);
+                }
+                
+                // If Quota Exceeded (429) or Server Overload (503)
+                if (gRes.status === 429 || gRes.status === 503) {
+                    lastError = { status: gRes.status, message: data.error?.message };
+                    // ADD TO BLACKLIST
+                    failedKeys.add(apiKey);
+                    continue; 
+                }
+                
+                // Other errors (400, 403, etc) -> Stop immediately
+                return res.status(gRes.status).json({ error: data.error?.message, details: data });
+
+            } catch (e) {
+                // Network error - try next key
+                lastError = { status: 502, message: e.message };
+                continue;
             }
-            
-            return res.status(200).json(data);
-        } catch (e) {
-            return res.status(500).json({ error: "Proxy Fetch Failed: " + e.message });
         }
+        
+        // If loop finishes without success
+        return res.status(lastError?.status || 500).json({ 
+            error: lastError?.message || "All API Keys exhausted (Quota limit reached)." 
+        });
     }
 
     const ADMIN_USER = (process.env.ADMIN_USERNAME || process.env.VITE_ADMIN_USERNAME || "").trim();
