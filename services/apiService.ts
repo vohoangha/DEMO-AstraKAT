@@ -76,7 +76,7 @@ const proxyFetch = async (body: any) => {
     return response.json();
 };
 
-const checkWebAccess = (userAccess: string | undefined) => {
+export const checkWebAccess = (userAccess: string | undefined) => {
     const hostname = window.location.hostname;
     // Map existing 'BOTH' to 'ALL' for backward compatibility
     let access = userAccess || 'ALL';
