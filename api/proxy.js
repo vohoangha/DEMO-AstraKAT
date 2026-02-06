@@ -1,4 +1,3 @@
-
 // Memory cache for bad keys (Global variable survives warm restarts in Vercel/Node)
 const failedKeys = new Set();
 let lastFailureReset = Date.now();
@@ -163,6 +162,7 @@ export default async function handler(req, res) {
                 'admin_top_up', 
                 'admin_update_role', 
                 'admin_toggle_status', 
+                'admin_update_web_access',
                 'admin_reset_password', 
                 'admin_delete_user', 
                 'admin_create_user',
